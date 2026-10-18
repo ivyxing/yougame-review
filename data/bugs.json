@@ -1,0 +1,376 @@
+[
+ {
+  "id": "BUG-01",
+  "title": "The \"press Play to update\" banner shows on every page, with no Play button",
+  "severity": "medium",
+  "area": "Site-wide",
+  "url": "https://yougame.co/specs",
+  "status": "verified",
+  "summary": "Every page shows a banner saying \"A YG Dolphin update is out: press Play to update.\" It appears to signed-out visitors and on pages that have nothing to do with the desktop app (Sign in, What you can upload, Support, SDK, browser games like GlobeTap). There is no Play button on most of those pages, so the instruction can't be followed, and new visitors don't know what YG Dolphin is.",
+  "steps": [
+   "Open https://yougame.co/specs (or /support, /upload, /g/globetap) while signed out.",
+   "Look at the very top of the page."
+  ],
+  "expected": "The update notice only shows to people who have the desktop app (or who play a game that needs it), ideally on the game page next to the Play button, and it can be dismissed.",
+  "actual": "The banner shows on every page, to everyone, and the page it appears on usually has no Play button.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-01-page.png",
+    "screenshots/bugs/bug-01-fullpage.png",
+    "screenshots/bugs/bug-01-detail1.png"
+   ],
+   "notes": [
+    "Banner text, verbatim: \"A YG Dolphin update is out: press Play to update.\"",
+    "Seen on: /, /?sort=top, /?sort=new, /upload, /specs, /sdk, /support, /source, /how-it-works, /feature-requests, /g/globetap, /g/perfect-circle-live-competitive-multiplayer.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): Banner \"A YG Dolphin update is out: press Play to update.\" shows at the top of /specs for a signed-out visitor; no Play button on the page. Also seen on every other page visited this run."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co, the site-wide banner \"A YG Dolphin update is out: press Play to update.\" renders on every page for every visitor, including signed-out users and pages without a Play button (/specs, /support, /upload, /g/globetap).\n\nFix:\n1. Find the component that renders this banner (search the codebase for \"press Play to update\").\n2. Only render it when (a) the visitor has the desktop app / Orca installed and its version is older than the latest, or (b) the current page is a game page whose game runs in Orca (e.g. /g/open-brawl, /g/project-rollback).\n3. On game pages, place the notice next to the Play button so \"press Play\" refers to something visible.\n4. Add a dismiss (x) button and remember dismissal per version (localStorage key including the version), so it reappears only for the next update.\n5. Use one product name in the copy (see BUG-07) and link the name to /help/orca.\n\nAcceptance: signed-out visitor on /specs sees no banner; a game page for an Orca game shows the notice beside Play; dismissing hides it until the next version."
+ },
+ {
+  "id": "BUG-02",
+  "title": "Avatar icons in the sign-up form have no text for screen readers",
+  "severity": "medium",
+  "area": "Accessibility",
+  "url": "https://yougame.co/login?mode=signup&next=%2Fupload",
+  "status": "verified",
+  "summary": "The sign-up form (shown at /upload when signed out) asks people to pick an icon from 26 pictures (knight, unicorn, wizard, ...). None of the pictures has alt text, so a screen reader user hears 26 unlabeled images and can't choose one. It also isn't clear whether an icon is required, since none is preselected.",
+  "steps": [
+   "Sign out and click Upload; you land on https://yougame.co/login?mode=signup&next=%2Fupload.",
+   "Use a screen reader (VoiceOver: Cmd+F5) and move to \"Your icon\"."
+  ],
+  "expected": "Each icon announces its name and selected state (e.g. \"Knight, radio button, 1 of 26, selected\"), and the group is labelled \"Your icon\".",
+  "actual": "Images have empty alt text, so the choices are announced without names.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-02-page.png",
+    "screenshots/bugs/bug-02-fullpage.png",
+    "screenshots/bugs/bug-02-detail1.png"
+   ],
+   "notes": [
+    "Page text shows 26 avatar images (knight, unicorn, wizard, bunny, ninja, mermaid, robot, fairy, alien, popstar, dragon, axolotl, astronaut, strawberry, pirate, princess, cat, butterfly, ghost, deer, slime, fox, skull, samurai, frog, bear) with empty alt attributes.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): /upload redirects signed-out visitors to /login?mode=signup&next=%2Fupload. All 26 avatar <img> elements have empty alt (counted in the DOM)."
+   ],
+   "console": []
+  },
+  "agent_prompt": "In the yougame.co sign-up form (rendered at /upload and /login when signed out), the \"Your icon\" picker shows 26 avatar <img> elements with empty alt text and no accessible selection state.\n\nFix:\n1. Find the avatar picker component (search for \"Pick one now, change it any time\").\n2. Render it as a radio group: wrapper with role=\"radiogroup\" and aria-labelledby pointing at the \"Your icon\" label; each option is a <button role=\"radio\" aria-checked> or a visually hidden <input type=\"radio\"> with a <label>.\n3. Give each option an accessible name from the avatar id (e.g. \"Knight\"); keep the <img alt=\"\"> decorative inside the labelled control.\n4. Support arrow keys to move between options and Space to select; show a visible focus ring and selected outline (not colour alone).\n5. Preselect a default avatar (or mark the field optional in the label) so it's clear whether a choice is required.\n\nAcceptance: axe-core reports no \"image-alt\" or \"aria-required-children\" issues on /upload; VoiceOver announces \"Knight, radio button, selected, 1 of 26\"."
+ },
+ {
+  "id": "BUG-03",
+  "title": "Sign-up page is titled \"Sign in\" but says \"Create your account\"",
+  "severity": "low",
+  "area": "Account",
+  "url": "https://yougame.co/login?mode=signup&next=%2Fupload",
+  "status": "verified",
+  "summary": "When a signed-out visitor clicks Upload, they land on a page whose browser tab and share title say \"Sign in\" while the heading says \"Create your account\". Returning users looking for sign-in have to find the small \"Already have an account? Sign in\" link at the bottom.",
+  "steps": [
+   "Sign out and click Upload; you land on https://yougame.co/login?mode=signup&next=%2Fupload.",
+   "Compare the browser tab title with the page heading."
+  ],
+  "expected": "Tab title and heading match the form shown (e.g. \"Create your account · YouGame\"), and the sign-in option is easy to spot near the top.",
+  "actual": "Tab and og:title say \"Sign in · YouGame Alpha\"; the heading says \"Create your account\".",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-03-page.png",
+    "screenshots/bugs/bug-03-fullpage.png",
+    "screenshots/bugs/bug-03-detail1.png"
+   ],
+   "notes": [
+    "<title> and og:title: \"Sign in · YouGame Alpha\"; H1: \"Create your account\".",
+    "Sign-in link: https://yougame.co/login?mode=signin&next=%2Fupload",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): document.title and og:title are \"Sign in · YouGame Alpha\"; the only H1 is \"Create your account\"."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co, the auth page (/login, and /upload when signed out) sets <title> and og:title to \"Sign in · YouGame Alpha\" while the default form is sign-up with H1 \"Create your account\".\n\nFix:\n1. In the auth page's metadata (Next.js generateMetadata or the page's metadata export), derive the title from the mode: mode=signin -> \"Sign in · YouGame\", otherwise \"Create your account · YouGame\".\n2. When the user arrives from a gated action (next=/upload), add a one-line reason above the form, e.g. \"Sign in or create an account to upload a game.\"\n3. Move \"Already have an account? Sign in\" up next to the heading as a tab or toggle (Create account | Sign in).\n\nAcceptance: /upload signed out shows matching tab title and H1; /login?mode=signin shows \"Sign in\" in both."
+ },
+ {
+  "id": "BUG-04",
+  "title": "\"How it works\" developer steps start at 02",
+  "severity": "low",
+  "area": "Content",
+  "url": "https://yougame.co/how-it-works",
+  "status": "fixed",
+  "summary": "Fixed on the live site. When first read, the \"For developers\" steps on How it works started at 02; the browser check now shows 01, 02, 03. Kept here so he can confirm and close it.",
+  "steps": [
+   "Open https://yougame.co/how-it-works.",
+   "Scroll to \"For developers\"."
+  ],
+  "expected": "Developer steps are numbered 01, 02, 03, with a first step about publishing a game.",
+  "actual": "The list starts at 02 (\"Add the features around the game\") and then 03.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-04-page.png",
+    "screenshots/bugs/bug-04-fullpage.png"
+   ],
+   "notes": [
+    "For developers, verbatim: \"02 Add the features around the game.\" then \"03 Find your players. Build with their feedback.\" No 01 in the page content.",
+    "The Remixing section also mixes \"01\" with \"1, 2, 3\" numbering.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): Not reproduced: the live page now numbers the For developers steps 01, 02, 03 (and the Remixing section uses 01 too). Looks fixed since the text fetch."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co/how-it-works, the \"For developers\" step list renders items numbered 02 and 03 with no 01.\n\nFix:\n1. Open the How it works page component and find the developers steps array (search for \"Add the features around the game\").\n2. Either restore the missing first item (suggested: \"01 Publish in minutes. Upload a zip, a single HTML file or a link; it's live with no review queue.\" linking to /upload and /specs) or renumber so the list is 01, 02.\n3. Generate step numbers from the array index (String(i+1).padStart(2,\"0\")) rather than hard-coding them, so this can't recur.\n4. In the Remixing section, use one numbering style.\n\nAcceptance: For players and For developers both show 01, 02, 03."
+ },
+ {
+  "id": "BUG-05",
+  "title": "Garbled sentence in upload rules: \"Games that are not get removed.\"",
+  "severity": "low",
+  "area": "Content",
+  "url": "https://yougame.co/specs",
+  "status": "verified",
+  "summary": "The Rules section of \"What you can upload\" contains a broken sentence, \"Games that are not get removed.\" A creator reading the rules can't tell what is not allowed.",
+  "steps": [
+   "Open https://yougame.co/specs.",
+   "Scroll to Rules."
+  ],
+  "expected": "A complete sentence, e.g. \"Games that don't follow these rules get removed.\"",
+  "actual": "\"Games that are not get removed.\"",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-05-page.png",
+    "screenshots/bugs/bug-05-fullpage.png",
+    "screenshots/bugs/bug-05-detail1.png"
+   ],
+   "notes": [
+    "Verbatim from the Rules section: \"Games that are not get removed.\"",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): \"Games that are not get removed.\" is still on /specs (highlighted in detail1)."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co/specs, the Rules section contains the broken sentence \"Games that are not get removed.\"\n\nFix: search the codebase for \"Games that are not get removed\" and replace it with \"Games that break these rules get removed.\" Check the surrounding sentences read correctly. Acceptance: the sentence no longer appears on /specs."
+ },
+ {
+  "id": "BUG-06",
+  "title": "Upload specs say \"no review queue\" and \"held for review\"",
+  "severity": "low",
+  "area": "Content",
+  "url": "https://yougame.co/specs",
+  "status": "verified",
+  "summary": "The specs page promises creators \"There is no review queue\" but later says a game that calls a crypto wallet \"is held for review\". Creators will be surprised if their game doesn't go live.",
+  "steps": [
+   "Open https://yougame.co/specs.",
+   "Read the intro, then the \"How games run\" section."
+  ],
+  "expected": "The intro mentions the exception, e.g. \"No review queue (except games that call crypto wallets).\"",
+  "actual": "Intro: \"There is no review queue and no build step: sign in, upload it, and it is live.\" Later: \"Crypto wallets are blocked, and a game that calls one is held for review.\"",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-06-page.png",
+    "screenshots/bugs/bug-06-fullpage.png",
+    "screenshots/bugs/bug-06-detail1.png",
+    "screenshots/bugs/bug-06-detail2.png"
+   ],
+   "notes": [
+    "Both sentences quoted verbatim from /specs.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): Both \"no review queue\" (intro) and \"held for review\" (rules) are on /specs; detail1 and detail2 highlight each."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co/specs, the intro says \"There is no review queue and no build step: sign in, upload it, and it is live.\" while the How games run section says \"Crypto wallets are blocked, and a game that calls one is held for review.\"\n\nFix: update the intro to name the exception, e.g. \"There is no review queue and no build step: sign in, upload it, and it is live. (Games that call a crypto wallet are held for review.)\" If the upload flow shows a status after upload, make sure a held game says \"Held for review\" and why. Acceptance: the two statements no longer contradict."
+ },
+ {
+  "id": "BUG-07",
+  "title": "Half-finished rename: some pages still say \"Orca\" instead of \"YG Dolphin\"",
+  "severity": "low",
+  "area": "Content",
+  "url": "https://yougame.co/help/orca",
+  "status": "verified",
+  "summary": "The help page is now titled \"YG Dolphin help\" and explains that the app still shows as Orca on your computer, so the rename is under way. But headings on that same page (\"Orca won't start on Windows\") and the Source code page (\"Orca is our fork of Dolphin\") still use the old name, so players see both.",
+  "steps": [
+   "Open https://yougame.co/help/orca: title says \"YG Dolphin help\", a heading says \"Orca won't start on Windows\".",
+   "Open https://yougame.co/source: it says \"Orca is our fork of Dolphin\"."
+  ],
+  "expected": "\"YG Dolphin\" everywhere on the site, with \"Orca\" mentioned once only where people need it (the app's name on their computer).",
+  "actual": "Mixed: \"YG Dolphin\" in the banner, footer and help title; \"Orca\" in help headings, /source and game pages.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-07-page.png",
+    "screenshots/bugs/bug-07-fullpage.png",
+    "screenshots/bugs/bug-07-detail1.png"
+   ],
+   "notes": [
+    "Footer: \"YG Dolphin help\" -> https://yougame.co/help/orca.",
+    "/help/orca uses only \"Orca\": \"Orca is YouGame's fork of Dolphin.\"",
+    "/g/open-brawl: \"powered by Orca, YouGame's Dolphin fork\".",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): Partly changed: /help/orca is now titled \"YG Dolphin help\" and explains \"On your computer it still shows as Orca, its earlier name.\" But the same page still has headings like \"Orca won't start on Windows\", and /source says \"Orca is our fork of Dolphin\", so both names are still in use."
+   ],
+   "console": []
+  },
+  "agent_prompt": "yougame.co is renaming its Dolphin fork from \"Orca\" to \"YG Dolphin\". The help page title and intro already use \"YG Dolphin (shown as Orca on your computer)\", but leftover \"Orca\" strings remain: headings on /help/orca (e.g. \"Orca won't start on Windows\"), the /source page (\"Orca is our fork of Dolphin\"), and game page copy such as /g/open-brawl (\"powered by Orca\").\n\nFix:\n1. Search user-facing copy for \"Orca\" (exclude code identifiers, URLs like /help/orca, repo names like yougame-co/orca-netplay, and the installed app name until it's renamed).\n2. Replace with \"YG Dolphin\". Keep one explanatory mention per page where the desktop app is involved: \"YG Dolphin (shown as Orca on your computer)\".\n3. Update anchor ids on /help/orca if headings change, and keep redirects for old anchors.\n4. Optionally add /help/yg-dolphin and redirect /help/orca to it.\n\nAcceptance: rendered pages show \"Orca\" only inside the \"shown as Orca on your computer\" explanation or in version/tag names on /source."
+ },
+ {
+  "id": "BUG-08",
+  "title": "Orca source for the current version isn't published",
+  "severity": "medium",
+  "area": "Legal / compliance",
+  "url": "https://yougame.co/source",
+  "status": "verified",
+  "summary": "The Source code page lists Orca 0.3.53 as the current version, but its source (and 0.3.51, 0.3.44, 0.3.39) is marked \"Being published\" with no link. Orca is a fork of Dolphin, which is GPL-licensed, so source for each distributed binary normally needs to be available when the binary ships.",
+  "steps": [
+   "Open https://yougame.co/source.",
+   "Find the Orca versions list."
+  ],
+  "expected": "Every Orca version offered for download has a working source link (tag or archive) at release time.",
+  "actual": "0.3.53 (Current), 0.3.51, 0.3.44 and 0.3.39 say \"Being published\" with no link; 0.3.38 and earlier link orca-<version> tags.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-08-page.png",
+    "screenshots/bugs/bug-08-fullpage.png",
+    "screenshots/bugs/bug-08-detail1.png"
+   ],
+   "notes": [
+    "Repository linked from the page: https://github.com/yougame-co/orca-netplay",
+    "Not legal advice; worth checking Dolphin's GPL-2.0-or-later obligations.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): /source lists Orca 0.3.53 (Current), 0.3.51, 0.3.44 and 0.3.39 as \"Being published\" with no tag link; 0.3.38 and earlier link orca-<version> tags."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co/source, Orca versions 0.3.53 (marked Current), 0.3.51 and 0.3.44 show \"Being published\" instead of a source link. Orca is a Dolphin fork (GPL-2.0-or-later).\n\nFix:\n1. In the release pipeline for Orca, push a git tag to github.com/yougame-co/orca-netplay (or upload a source tarball) before or together with publishing the desktop binary.\n2. Make the /source page read the version list from the release metadata and link each version to its tag; fail the release (or hide the version from /desktop) if the source link is missing.\n3. Backfill tags for 0.3.39, 0.3.44, 0.3.51 and 0.3.53 (0.3.38 and earlier already link orca-<version> tags).\n\nAcceptance: every version on /source has a working link, including the current one."
+ },
+ {
+  "id": "BUG-09",
+  "title": "\"Most players in game this minute\" shows total plays, including a 1-play game",
+  "severity": "low",
+  "area": "Home feed",
+  "url": "https://yougame.co/?sort=top",
+  "status": "verified",
+  "summary": "The homepage carousel \"Popular right now\" is subtitled \"Most players in game this minute\", but the cards show lifetime plays (e.g. \"1 play • 5 days ago\" for Don Bass Idols, \"84 plays • last month\" for Word Duel). It reads as if these games are busy right now when there may be no one in them.",
+  "steps": [
+   "Open https://yougame.co/?sort=top.",
+   "Look at \"Popular right now\" and the stats on each card."
+  ],
+  "expected": "Cards in this row show the live player count (\"3 playing now\"), or the row is hidden or relabelled when nobody is playing.",
+  "actual": "Order shown: Perfect Circle (43 plays), Word Duel (84), GlobeTap (141), Don Bass Idols (1). No live counts are shown on these cards.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-09-page.png",
+    "screenshots/bugs/bug-09-fullpage.png",
+    "screenshots/bugs/bug-09-detail1.png"
+   ],
+   "notes": [
+    "Subheading verbatim: \"Most players in game this minute\".",
+    "Elsewhere the site does show live counts (\"3 playing\" on Project+), so the data exists.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): \"Popular right now / Most players in game this minute\" shows Perfect Circle (43 plays), Word Duel (84), GlobeTap (141), Don Bass Idols (1 play); no live player counts on the cards."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On the yougame.co homepage, the \"Popular right now\" carousel (subtitle \"Most players in game this minute\") shows cards with lifetime plays rather than live players, and includes games with 1 total play.\n\nFix:\n1. Find the carousel (search for \"Most players in game this minute\").\n2. On these cards, show the live count (\"N playing\") in place of total plays.\n3. Exclude games with 0 current players; if fewer than ~3 games have live players, either hide the row or fall back to a different label such as \"Trending this week\" with matching data.\n\nAcceptance: every card in the row shows a live player count of at least 1, or the row is hidden or relabelled."
+ },
+ {
+  "id": "BUG-10",
+  "title": "Perfect Circle is listed as \"Single player, no online mode\" but is a live competitive game",
+  "severity": "low",
+  "area": "Game listing",
+  "url": "https://yougame.co/g/perfect-circle-live-competitive-multiplayer",
+  "status": "verified",
+  "summary": "The game's title is \"Perfect Circle - Live Competitive Multiplayer\" and it has an online leaderboard, but the listing says \"Single player · Played on your own. No online mode.\" Players filtering for Multiplayer won't find it. This is creator data, but the upload form could catch it.",
+  "steps": [
+   "Open the Perfect Circle game page.",
+   "Compare the title with the player-mode label."
+  ],
+  "expected": "Games with an online leaderboard show it in their mode label (e.g. \"Single player · Online leaderboard\").",
+  "actual": "Label: \"Single player\", \"Played on your own. No online mode.\"",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-10-page.png",
+    "screenshots/bugs/bug-10-fullpage.png",
+    "screenshots/bugs/bug-10-detail1.png"
+   ],
+   "notes": [
+    "Leaderboard on the page: \"19 players\", with Everyone/Friends and All time/This week/Today filters.",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): Perfect Circle page shows \"Single player\" / \"No online mode\" (highlighted) while the game is titled Live Competitive Multiplayer."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co, games that use the leaderboard SDK but are set to \"Single player\" are described as \"Played on your own. No online mode.\" (example: /g/perfect-circle-live-competitive-multiplayer).\n\nFix:\n1. Where the player-mode description is rendered (search \"No online mode\"), if the game has an active leaderboard, render \"Single player · Online leaderboard\" instead of \"No online mode\".\n2. In the upload/edit form, if the title or description contains \"multiplayer\" and the mode is Single player, show an inline hint asking the creator to confirm the mode.\n\nAcceptance: Perfect Circle's page no longer says \"No online mode\"."
+ },
+ {
+  "id": "BUG-11",
+  "title": "Brawl Online says \"For Mac and PC!\" but only Apple silicon Macs are supported",
+  "severity": "low",
+  "area": "Game listing",
+  "url": "https://yougame.co/g/open-brawl",
+  "status": "verified",
+  "summary": "The Brawl Online page says \"For Mac and PC!\" while the platform line reads \"Runs natively on Mac (Apple silicon) · Windows in the desktop app\", and the help page has a separate section for Intel Macs. Intel Mac owners may download the app before learning it doesn't run for them.",
+  "steps": [
+   "Open https://yougame.co/g/open-brawl.",
+   "Compare the \"For Mac and PC!\" copy with the platform line."
+  ],
+  "expected": "The game page states supported platforms precisely before the download button, with a link to the Intel Mac/Linux help section.",
+  "actual": "\"For Mac and PC!\" alongside \"Runs natively on Mac (Apple silicon) · Windows in the desktop app\".",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-11-page.png",
+    "screenshots/bugs/bug-11-fullpage.png",
+    "screenshots/bugs/bug-11-detail1.png"
+   ],
+   "notes": [
+    "/help/orca has a heading \"Linux, Steam Deck and Intel Macs\".",
+    "Browser check (Playwright Chromium 1280x800, signed out, 2026-10-18): \"For Mac and PC!\" still on /g/open-brawl (highlighted)."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co game pages for Orca games (e.g. /g/open-brawl), the copy \"For Mac and PC!\" conflicts with the platform line \"Runs natively on Mac (Apple silicon) · Windows in the desktop app\".\n\nFix:\n1. Next to the Download desktop app button, show the exact support list: \"macOS on Apple silicon · Windows 10/11\" (adjust to the truth), plus \"Intel Mac, Linux or Steam Deck? See help\" linking to /help/orca#linux-steam-deck-and-intel-macs.\n2. On /desktop, detect Intel Macs (navigator.userAgentData or WebGL renderer hint) and show the help link before offering a download.\n3. Ask the creator to update \"For Mac and PC!\" in the description, or render the platform line above it.\n\nAcceptance: an Intel Mac visitor sees the limitation before downloading."
+ },
+ {
+  "id": "BUG-12",
+  "title": "Game pages ask for leaderboard scores even when the leaderboard is off, logging a console error",
+  "severity": "low",
+  "area": "Game page",
+  "url": "https://yougame.co/g/globetap",
+  "status": "verified",
+  "summary": "Every game page asks the server for the visitor's best score, even for games with the leaderboard turned off. The server answers 403 \"The leaderboard is off for this game.\", and the browser logs it as an error. Players don't see anything break, but it's a wasted request on each page view and it buries real errors in the console and in error monitoring.",
+  "steps": [
+   "Open https://yougame.co/g/globetap (also /g/open-brawl, /g/project-rollback) with DevTools open.",
+   "Look at the Console and Network tabs."
+  ],
+  "expected": "No scores request when the game's leaderboard is off, or a 200 response with an empty result.",
+  "actual": "GET /api/scores?slug=globetap&period=all&limit=1&player=<guest id> returns 403 {\"error\":\"The leaderboard is off for this game.\",\"code\":\"board_off\"} and the console shows \"Failed to load resource: the server responded with a status of 403 (Forbidden)\".",
+  "evidence": {
+   "screenshots": [
+    "screenshots/ux/UX-10.png"
+   ],
+   "notes": [
+    "Seen on /g/globetap, /g/open-brawl and /g/project-rollback in the browser check (Playwright Chromium 1280x800, signed out, 2026-10-18).",
+    "Response body: {\"error\":\"The leaderboard is off for this game.\",\"code\":\"board_off\"}",
+    "Screenshot shows the GlobeTap page; the evidence is in the console and network log below."
+   ],
+   "console": [
+    "error: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "http 403: https://yougame.co/api/scores?slug=globetap&period=all&limit=1&player=6f5368a7-...",
+    "http 403: https://yougame.co/api/scores?slug=open-brawl&period=all&limit=1&player=76a7c14d-...",
+    "http 403: https://yougame.co/api/scores?slug=project-rollback&period=all&limit=1&player=ad49187c-..."
+   ]
+  },
+  "agent_prompt": "On yougame.co game pages (/g/<slug>), the client calls GET /api/scores?slug=<slug>&period=all&limit=1&player=<guest id> for every game. For games whose leaderboard is disabled, the API returns 403 {\"error\":\"The leaderboard is off for this game.\",\"code\":\"board_off\"}, which logs a console error on every page view (seen on /g/globetap, /g/open-brawl, /g/project-rollback).\n\nFix (do both):\n1. Client: find where the game page fetches the player's best score (search for \"/api/scores\" and \"limit=1\"). Only make the request when the game's data says the leaderboard is enabled (the page already knows, since it decides whether to render the leaderboard panel).\n2. API: in the /api/scores handler, return 200 with {\"enabled\":false,\"scores\":[]} for board_off instead of 403. Keep 403 for real permission failures.\n3. Make sure the client treats enabled:false as \"no leaderboard\" without logging.\n\nAcceptance: loading /g/globetap signed out produces no /api/scores request (or a 200), and the console shows no 403."
+ },
+ {
+  "id": "BUG-13",
+  "title": "A ranked player is named \"REMOTE CODE EXECUTION\" on the Project+ leaderboard",
+  "severity": "low",
+  "area": "Moderation",
+  "url": "https://yougame.co/g/project-rollback",
+  "status": "verified",
+  "summary": "The Project+ ranked leaderboard shows a player called \"REMOTE CODE EXECUTION\" at #6. It isn't a slur, but on a page where players install a desktop emulator and commenters already ask whether it is safe, a name like that reads as a security warning and can scare people off. Gamer tags appear to go live with no name filter or review.",
+  "steps": [
+   "Open https://yougame.co/g/project-rollback.",
+   "Scroll to Top players (Ranked)."
+  ],
+  "expected": "Gamer tags that imitate system or security messages (and slurs) are blocked when someone sets them, and existing ones can be reset by a moderator.",
+  "actual": "#6 on the ranked leaderboard: \"REMOTE CODE EXECUTION\", 1231 ELO.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/BUG-13-panel.png"
+   ],
+   "notes": [
+    "Leaderboard read on 2026-10-18: #1 The Doctor 1334, ... #6 REMOTE CODE EXECUTION 1231, ... #10 xX_CerealKiD69_Xx 1223.",
+    "The page comments include a question about RCE safety, which makes the name more alarming.",
+    "Browser check (2026-10-18): Top players panel, 402 ranked players, shows #6 REMOTE CODE EXECUTION, 37W 4L, Gold II, 1231 ELO."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co, gamer tags are shown on public leaderboards and comments with no apparent name filtering. Example: the Project+ ranked leaderboard (/g/project-rollback) shows a player named \"REMOTE CODE EXECUTION\" at #6, which reads as a security warning on a page that asks players to install a desktop emulator.\n\nFix:\n1. Find where gamer tags are created and changed (sign-up form \"Gamer tag\" field and the account settings endpoint).\n2. Add server-side validation: reject tags matching a blocklist of slurs and of system/security-scare phrases (e.g. \"remote code execution\", \"rce\", \"virus\", \"hacked\", \"admin\", \"moderator\", \"yougame\", \"support\", \"official\"), normalising case, spacing, leetspeak and repeated characters first. Return a clear error (\"Pick a different tag\").\n3. Give admins a way to reset a tag to a neutral default (\"Player1234\") and to flag a tag from the leaderboard or a comment via the existing Report flow.\n4. Run the new validator over existing tags and list matches for manual review; don't auto-rename.\n\nAcceptance: setting the tag \"Remote Code Execution\" fails with a helpful message; an admin can reset an existing offending tag."
+ }
+]
