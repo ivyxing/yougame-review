@@ -5,44 +5,53 @@ import {
   REASON_LABEL,
   SEVERITIES,
   STATUS_LABEL,
+  bugGroupStatus,
   bugStatus,
   bugThumbnail,
+  groupBugs,
   groupIdeas,
+  groupSeverity,
+  isBugKind,
   ideaStatus,
   screenshotLabel,
   stepsList,
   type Bug,
+  type BugGroup,
   type Decision,
   type DecisionInput,
   type Decisions,
   type DismissReason,
   type Idea,
+  type Improvement,
   type Kind,
   type Proposal,
   type Status,
 } from "./model.ts";
-import { Bug as BugIcon, Close, Copy, Examine, External, Info, Layout, Learn } from "./icons.tsx";
+import { Bug as BugIcon, Close, Copy, Examine, External, Info, Layout, Learn, Spark } from "./icons.tsx";
 
 interface Review {
   viewer: { login: string; canWrite: boolean };
   bugs: Bug[];
+  bugGroups?: BugGroup[];
   ideas: Idea[];
   proposals?: Proposal[];
+  improvements?: Improvement[];
   decisions: Decisions;
 }
-type Page = "bugs" | "ideas" | "feedback";
-type Item = { kind: "bug"; item: Bug } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal };
+type Page = "bugs" | "ideas" | "improvements" | "feedback";
+type Item = { kind: "bug"; item: Bug } | { kind: "bug_group"; item: BugGroup } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal } | { kind: "improvement"; item: Improvement };
 type Grouped = ReturnType<typeof groupIdeas>;
+type BugGrouped = ReturnType<typeof groupBugs>;
 
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
-const PAGES: Page[] = ["bugs", "ideas", "feedback"];
+const PAGES: Page[] = ["bugs", "ideas", "improvements", "feedback"];
+const pageOf = (id: string): Page => (/^(BUG|BG)-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
 
 function pageFromHash(): { page: Page; open?: string } {
   const h = decodeURIComponent(location.hash.slice(1));
   if (PAGES.includes(h as Page)) return { page: h as Page };
-  if (/^BUG-/i.test(h)) return { page: "bugs", open: h };
-  if (/^(UX|RD)-/i.test(h)) return { page: "ideas", open: h };
+  if (/^(BUG|BG|UX|RD|IM)-/i.test(h)) return { page: pageOf(h), open: h };
   return { page: "bugs" };
 }
 
@@ -86,20 +95,27 @@ export function App() {
 
   const decisions = review.decisions;
   const grouped = groupIdeas(review.ideas, review.proposals ?? []);
+  const improvements = review.improvements ?? [];
+  const bugGrouped = groupBugs(review.bugs, review.bugGroups ?? []);
   const openItem: Item | undefined = openId
     ? (() => {
         const b = review.bugs.find((x) => x.id === openId);
         if (b) return { kind: "bug", item: b } as Item;
+        const g = bugGrouped.groups.find((x) => x.id === openId);
+        if (g) return { kind: "bug_group", item: g } as Item;
         const i = review.ideas.find((x) => x.id === openId);
         if (i) return { kind: "idea", item: i } as Item;
         const p = grouped.proposals.find((x) => x.id === openId);
-        return p ? ({ kind: "proposal", item: p } as Item) : undefined;
+        if (p) return { kind: "proposal", item: p } as Item;
+        const m = improvements.find((x) => x.id === openId);
+        return m ? ({ kind: "improvement", item: m } as Item) : undefined;
       })()
     : undefined;
 
   const counts = {
-    bugs: review.bugs.filter((b) => ["open", "fixing"].includes(bugStatus(b, decisions[b.id]))).length,
+    bugs: [...bugGrouped.groups.map((g) => bugGroupStatus(g, decisions, review.bugs)), ...bugGrouped.standalone.map((b) => bugStatus(b, decisions[b.id]))].filter((st) => st === "open" || st === "fixing").length,
     ideas: grouped.proposals.filter((p) => !decisions[p.id] || decisions[p.id].status === "open").length + grouped.standalone.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
+    improvements: improvements.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
     feedback: Object.values(decisions).filter((d) => d.status === "dismissed" || d.note).length,
   };
 
@@ -127,6 +143,7 @@ export function App() {
         <nav aria-label="Pages">
           <NavItem icon={<BugIcon />} label="Bugs" count={counts.bugs} countLabel="open" active={page === "bugs"} onClick={() => { setPage("bugs"); setOpenId(undefined); }} />
           <NavItem icon={<Layout />} label="Design ideas" count={counts.ideas} countLabel="need your take" active={page === "ideas"} onClick={() => { setPage("ideas"); setOpenId(undefined); }} />
+          {improvements.length > 0 && <NavItem icon={<Spark />} label="Improvements" count={counts.improvements} countLabel="need your take" active={page === "improvements"} onClick={() => { setPage("improvements"); setOpenId(undefined); }} />}
           <NavItem icon={<Learn />} label="Scan feedback" count={counts.feedback} countLabel="items" active={page === "feedback"} onClick={() => { setPage("feedback"); setOpenId(undefined); }} />
         </nav>
         <div className="me">
@@ -136,13 +153,14 @@ export function App() {
       </aside>
 
       <main className="main">
-        {page === "bugs" && <BugsPage bugs={review.bugs} decisions={decisions} onOpen={setOpenId} say={say} />}
+        {page === "bugs" && <BugsPage bugs={review.bugs} grouped={bugGrouped} decisions={decisions} onOpen={setOpenId} say={say} />}
         {page === "ideas" && <IdeasPage ideas={review.ideas} grouped={grouped} decisions={decisions} onOpen={setOpenId} say={say} />}
-        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} onOpen={(id) => { setPage(/^(UX|RD)/.test(id) ? "ideas" : "bugs"); setOpenId(id); }} />}
+        {page === "improvements" && <ImprovementsPage improvements={improvements} decisions={decisions} onOpen={setOpenId} say={say} />}
+        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} bugGroups={bugGrouped.groups} onOpen={(id) => { setPage(pageOf(id)); setOpenId(id); }} />}
       </main>
 
       {openItem && (
-        <Drawer key={openItem.item.id} entry={openItem} decisions={decisions} review={review} grouped={grouped} canWrite={review.viewer.canWrite} onOpen={setOpenId} onClose={() => setOpenId(undefined)} onSave={save} say={say} />
+        <Drawer key={openItem.item.id} entry={openItem} decisions={decisions} review={review} grouped={grouped} bugGrouped={bugGrouped} canWrite={review.viewer.canWrite} onOpen={setOpenId} onClose={() => setOpenId(undefined)} onSave={save} say={say} />
       )}
       <div className="toast" role="status" aria-live="polite">{toast && <span>{toast}</span>}</div>
     </div>
@@ -252,17 +270,26 @@ function Chips<T extends string>({ label, options, value, onChange }: { label: s
 
 type BugFilter = "active" | "fixed" | "dismissed" | "all";
 
-function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
+/** One card on the bugs board: a bug on its own, or a group of similar bugs. */
+type BugEntry = { id: string; kind: "bug" | "bug_group"; title: string; area?: string; severity: Bug["severity"]; status: Status; thumbs: string[]; prompt?: string };
+
+function BugsPage({ bugs, grouped, decisions, onOpen, say }: { bugs: Bug[]; grouped: BugGrouped; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
   const [filter, setFilter] = useState<BugFilter>("active");
-  const st = (b: Bug) => bugStatus(b, decisions[b.id]);
-  const groups: Record<BugFilter, Bug[]> = {
-    active: bugs.filter((b) => ["open", "fixing"].includes(st(b))),
-    fixed: bugs.filter((b) => st(b) === "fixed"),
-    dismissed: bugs.filter((b) => st(b) === "dismissed"),
-    all: bugs,
+  const entries: BugEntry[] = [
+    ...grouped.groups.map((g) => {
+      const members = g.bugs.map((id) => bugs.find((b) => b.id === id)!);
+      return { id: g.id, kind: "bug_group" as const, title: g.title, area: `${members.length} bugs${g.area ? ` · ${g.area}` : ""}`, severity: groupSeverity(g, bugs), status: bugGroupStatus(g, decisions, bugs), thumbs: members.map(bugThumbnail).filter(Boolean).slice(0, 2) as string[], prompt: bugGroupPrompt(g, bugs) };
+    }),
+    ...grouped.standalone.map((b) => ({ id: b.id, kind: "bug" as const, title: b.title, area: b.area, severity: b.severity, status: bugStatus(b, decisions[b.id]) as Status, thumbs: [bugThumbnail(b)].filter(Boolean) as string[], prompt: b.agent_prompt })),
+  ];
+  const groups: Record<BugFilter, BugEntry[]> = {
+    active: entries.filter((e) => ["open", "fixing"].includes(e.status)),
+    fixed: entries.filter((e) => e.status === "fixed"),
+    dismissed: entries.filter((e) => e.status === "dismissed"),
+    all: entries,
   };
   const shown = groups[filter];
-  const prompts = groups.active.filter((b) => b.agent_prompt);
+  const prompts = groups.active.filter((e) => e.prompt).map((e) => ({ id: e.id, title: e.title, agent_prompt: e.prompt }));
   return (
     <>
       <header className="page-head">
@@ -279,13 +306,13 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
           { key: "active", label: "Open", count: groups.active.length },
           { key: "fixed", label: "Fixed", count: groups.fixed.length },
           { key: "dismissed", label: "Dismissed", count: groups.dismissed.length },
-          { key: "all", label: "All", count: bugs.length },
+          { key: "all", label: "All", count: entries.length },
         ]}
       />
-      <div className="board" style={boardCols(SEVERITIES.filter((sev) => shown.some((b) => b.severity === sev)).length)}>
+      <div className="board" style={boardCols(SEVERITIES.filter((sev) => shown.some((e) => e.severity === sev)).length)}>
         {shown.length === 0 && <p className="none">None</p>}
         {SEVERITIES.map((sev) => {
-          const items = shown.filter((b) => b.severity === sev);
+          const items = shown.filter((e) => e.severity === sev);
           if (items.length === 0) return null;
           return (
             <section key={sev} className="column" aria-label={`${cap(sev)} severity`}>
@@ -293,8 +320,8 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
                 <span className={`sev-mark sev-${sev}`} aria-hidden="true" />
                 {cap(sev)} <span className="count">· {items.length}</span>
               </h2>
-              {items.map((b) => (
-                <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} onOpen={onOpen} />
+              {items.map((e) => (
+                <Card key={e.id} id={e.id} title={e.title} meta={e.area} status={e.status === "open" ? undefined : statusText(e.kind, e.status, decisions[e.id])} thumbs={e.thumbs} onOpen={onOpen} />
               ))}
             </section>
           );
@@ -302,6 +329,14 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
       </div>
     </>
   );
+}
+
+/** The group's own prompt, or its bugs' prompts in order. */
+function bugGroupPrompt(g: BugGroup, bugs: Bug[]): string | undefined {
+  if (g.agent_prompt) return g.agent_prompt;
+  const parts = g.bugs.map((id) => bugs.find((b) => b.id === id)).filter((b): b is Bug => !!b?.agent_prompt);
+  if (!parts.length) return undefined;
+  return `Fix these related YouGame bugs together ("${g.title}"). Each section is self-contained.\n\n${parts.map((b) => `## ${b.id}: ${b.title}\n\n${b.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
 type IdeaFilter = "open" | "answered" | "dismissed" | "all";
@@ -378,6 +413,57 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
   );
 }
 
+function ImprovementsPage({ improvements, decisions, onOpen, say }: { improvements: Improvement[]; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
+  const [filter, setFilter] = useState<IdeaFilter>("open");
+  const st = (i: Improvement) => ideaStatus(i, decisions[i.id]);
+  const match = (status: string): Record<IdeaFilter, boolean> => ({ open: status === "open", answered: !["open", "dismissed"].includes(status), dismissed: status === "dismissed", all: true });
+  const shown = improvements.filter((i) => match(st(i))[filter]);
+  const count = (f: IdeaFilter) => improvements.filter((i) => match(st(i))[f]).length;
+  const planned = improvements.filter((i) => i.agent_prompt && st(i) === "planned");
+  return (
+    <>
+      <header className="page-head">
+        <h1>
+          Improvements
+          <InfoTip label="improvements">Ideas for YouGame beyond bugs and design fixes: features, reasons to come back, and help for creators. Each builds on what the beta test and design review found.</InfoTip>
+        </h1>
+        {planned.length > 0 && <button type="button" className="btn agent" onClick={() => copyText(promptBundle("Build these YouGame improvements one at a time. Each section is self-contained.", planned), say, `Copied ${planned.length} prompts for your coding agent`)}>
+          <Copy /> Copy prompts for “Will do”
+        </button>}
+      </header>
+      <Chips<IdeaFilter>
+        label="Show"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { key: "open", label: "Needs your take", count: count("open") },
+          { key: "answered", label: "Answered", count: count("answered") },
+          { key: "dismissed", label: "Dismissed", count: count("dismissed") },
+          { key: "all", label: "All", count: count("all") },
+        ]}
+      />
+      <div className="board" style={boardCols(PRIORITIES.filter((p) => shown.some((i) => (i.priority ?? "low") === p)).length)}>
+        {shown.length === 0 && <p className="none">None</p>}
+        {PRIORITIES.map((p) => {
+          const items = shown.filter((i) => (i.priority ?? "low") === p);
+          if (items.length === 0) return null;
+          return (
+            <section key={p} className="column" aria-label={`${cap(p)} priority`}>
+              <h2 className="column-title">
+                <span className={`sev-mark pri-${p}`} aria-hidden="true" />
+                {cap(p)} priority <span className="count">· {items.length}</span>
+              </h2>
+              {items.map((i) => (
+                <Card key={i.id} id={i.id} title={i.title} meta={[i.area, i.effort && `${cap(i.effort)} build`].filter(Boolean).join(" · ")} status={st(i) === "open" ? undefined : statusText("improvement", st(i), decisions[i.id])} thumbs={null} onOpen={onOpen} />
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 /** The redesign's own prompt, or its ideas' prompts in order. */
 function proposalPrompt(p: Proposal, ideas: Idea[]): string | undefined {
   if (p.agent_prompt) return p.agent_prompt;
@@ -390,13 +476,16 @@ function promptBundle(head: string, items: { id: string; title: string; agent_pr
   return `${head}\n\n${items.map((i) => `## ${i.id}: ${i.title}\n\n${i.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
-function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; wide?: boolean; onOpen: (id: string) => void }) {
+/** Pass thumbs={null} for an item whose screenshot only gives context, so the card stays compact. */
+function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; title: string; meta?: string; status?: string; thumbs: string[] | null; wide?: boolean; onOpen: (id: string) => void }) {
   return (
     <div className={`card-shell${wide ? " wide" : ""}`}>
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
-      <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
-        {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
-      </span>
+      {thumbs && (
+        <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
+          {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
+        </span>
+      )}
       <span className="card-body">
         <span className="card-id">{id}</span>
         <span className="card-title">{title}</span>
@@ -413,12 +502,14 @@ function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; t
 
 // ---------- detail drawer ----------
 
-function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, onSave, say }: { entry: Item; decisions: Decisions; review: Review; grouped: Grouped; canWrite: boolean; onOpen: (id: string) => void; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
+const PROMPT_NAME: Record<Kind, string> = { bug: "fix", bug_group: "fix", idea: "design", proposal: "design", improvement: "build" };
+
+function Drawer({ entry, decisions, review, grouped, bugGrouped, canWrite, onOpen, onClose, onSave, say }: { entry: Item; decisions: Decisions; review: Review; grouped: Grouped; bugGrouped: BugGrouped; canWrite: boolean; onOpen: (id: string) => void; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
   const { kind, item } = entry;
   const decision = decisions[item.id];
-  const parent = kind === "idea" ? grouped.parentOf.get(item.id) : undefined;
-  const current: Status = kind === "bug" ? bugStatus(item, decision) : ideaStatus(item as Idea, decision, parent && decisions[parent.id]);
-  const prompt = kind === "proposal" ? proposalPrompt(item, review.ideas) : item.agent_prompt;
+  const parent = kind === "idea" ? grouped.parentOf.get(item.id) : kind === "bug" ? bugGrouped.parentOf.get(item.id) : undefined;
+  const current: Status = kind === "bug" ? bugStatus(item, decision, parent && decisions[parent.id]) : kind === "bug_group" ? bugGroupStatus(item, decisions, review.bugs) : ideaStatus(item as Idea, decision, parent && decisions[parent.id]);
+  const prompt = kind === "proposal" ? proposalPrompt(item, review.ideas) : kind === "bug_group" ? bugGroupPrompt(item, review.bugs) : item.agent_prompt;
   const [status, setStatus] = useState<Status>(current);
   const [reason, setReason] = useState<DismissReason | undefined>(decision?.reason);
   const [note, setNote] = useState(decision?.note ?? "");
@@ -460,7 +551,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
     return ok;
   }
 
-  const options = (kind === "bug" ? ["open", "fixing", "fixed", "dismissed"] : ["open", "planned", "later", "done", "dismissed"]) as Status[];
+  const options = (isBugKind(kind) ? ["open", "fixing", "fixed", "dismissed"] : ["open", "planned", "later", "done", "dismissed"]) as Status[];
   const inherited = parent && !decision && decisions[parent.id];
 
   return (
@@ -469,16 +560,26 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         <div className="drawer-head">
           <span className="drawer-meta">
             <span className="mono">{item.id}</span>
-            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "idea" ? <span>{cap((item as Idea).priority)} priority</span> : <span>Redesign</span>}
+            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "bug_group" ? <span>{cap(groupSeverity(item as BugGroup, review.bugs))} severity · {(item as BugGroup).bugs.length} bugs</span> : kind === "proposal" ? <span>Redesign</span> : <span>{cap((item as Idea).priority)} priority</span>}
+            {kind === "improvement" && (item as Improvement).effort && <span>{cap((item as Improvement).effort)} build</span>}
             {item.area && <span>{item.area}</span>}
           </span>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}><Close /></button>
         </div>
         <h2 id="drawer-title" className="drawer-title">{item.title}</h2>
 
+        {kind === "bug" && parent && (
+          <button type="button" className="parent-link" onClick={() => go(parent.id)}>
+            <span>Part of <strong>{parent.title}</strong></span>
+            <Examine />
+          </button>
+        )}
         {kind === "bug" && <BugBody bug={item as Bug} onZoom={setZoom} />}
-        {kind === "idea" && <IdeaBody idea={item as Idea} parent={parent} onOpen={go} onZoom={setZoom} />}
+        {kind === "bug_group" && <BugGroupBody group={item as BugGroup} bugs={review.bugs} decisions={decisions} onOpen={go} />}
+        {kind === "idea" && <IdeaBody idea={item as Idea} parent={grouped.parentOf.get(item.id)} onOpen={go} onZoom={setZoom} />}
         {kind === "proposal" && <ProposalBody proposal={item as Proposal} ideas={review.ideas} decisions={decisions} onOpen={go} onZoom={setZoom} />}
+        {kind === "improvement" && <IdeaBody idea={item as Improvement} onOpen={go} onZoom={setZoom} />}
+        {kind === "improvement" && <Related ids={(item as Improvement).related ?? []} review={review} decisions={decisions} onOpen={go} />}
 
         {prompt && (
           <section className="agent-panel" aria-label="Prompt for your coding agent">
@@ -487,7 +588,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
                 For your coding agent
                 <InfoTip label="agent prompts">Written for an AI coding agent such as Claude Code, not for you to read. Copy it and paste it into the agent working in YouGame's code.</InfoTip>
               </span>
-              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, kind === "bug" ? "Fix prompt copied" : "Design prompt copied")}><Copy /> Copy {kind === "bug" ? "fix" : "design"} prompt</button>
+              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, `${cap(PROMPT_NAME[kind])} prompt copied`)}><Copy /> Copy {PROMPT_NAME[kind]} prompt</button>
             </div>
             <pre>{prompt}</pre>
           </section>
@@ -496,7 +597,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         <section className="decide" aria-labelledby="decide-title">
           <h3 id="decide-title">
             Your decision
-            <InfoTip label="decisions">Saved to the review repository for everyone with access. Dismissals and notes are read by future YouGame scans, so they stop reporting things like this.{kind === "proposal" ? " Ideas in this redesign follow this decision unless you decide on one of them separately." : parent && !decision ? ` Until you decide here, this idea follows the ${parent.title} decision.` : ""}</InfoTip>
+            <InfoTip label="decisions">Saved to the review repository for everyone with access. Dismissals and notes are read by future YouGame scans, so they stop reporting things like this.{kind === "proposal" ? " Ideas in this redesign follow this decision unless you decide on one of them separately." : kind === "bug_group" ? " Bugs in this group follow this decision unless you decide on one of them separately." : parent && !decision ? ` Until you decide here, this ${kind === "bug" ? "bug" : "idea"} follows the ${parent.title} decision.` : ""}</InfoTip>
           </h3>
           {canWrite ? (
             <>
@@ -646,6 +747,58 @@ function ProposalBody({ proposal, ideas, decisions, onOpen, onZoom }: { proposal
   );
 }
 
+function BugGroupBody({ group, bugs, decisions, onOpen }: { group: BugGroup; bugs: Bug[]; decisions: Decisions; onOpen: (id: string) => void }) {
+  const members = group.bugs.map((id) => bugs.find((b) => b.id === id)).filter((b): b is Bug => !!b);
+  return (
+    <>
+      {group.summary && <Block title="What they have in common"><p>{group.summary}</p></Block>}
+      <Block title={`Bugs in this group · ${members.length}`}>
+        <ul className="member-list">
+          {members.map((b) => {
+            const d = decisions[b.id];
+            return (
+              <li key={b.id}>
+                <button type="button" className="member" onClick={() => onOpen(b.id)} aria-label={`${b.id}: ${b.title}. Open details`}>
+                  <span className="mono">{b.id}</span>
+                  <span className="member-title">{b.title}</span>
+                  {d && <span className="card-status">{statusText("bug", d.status, d)}</span>}
+                  <Examine />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Block>
+    </>
+  );
+}
+
+/** The findings an improvement builds on, each opening its own detail. */
+function Related({ ids, review, decisions, onOpen }: { ids: string[]; review: Review; decisions: Decisions; onOpen: (id: string) => void }) {
+  const all = [...review.bugs, ...(review.bugGroups ?? []), ...review.ideas, ...(review.proposals ?? []), ...(review.improvements ?? [])];
+  const items = ids.map((id) => all.find((x) => x.id === id)).filter((x): x is (typeof all)[number] => !!x);
+  if (!items.length) return null;
+  return (
+    <Block title={`Builds on · ${items.length}`}>
+      <ul className="member-list">
+        {items.map((i) => {
+          const d = decisions[i.id];
+          return (
+            <li key={i.id}>
+              <button type="button" className="member" onClick={() => onOpen(i.id)} aria-label={`${i.id}: ${i.title}. Open details`}>
+                <span className="mono">{i.id}</span>
+                <span className="member-title">{i.title}</span>
+                {d && <span className="card-status">{statusText(d.kind, d.status, d)}</span>}
+                <Examine />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Block>
+  );
+}
+
 function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="block">
@@ -678,8 +831,8 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 
 // ---------- what scans learn ----------
 
-function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals: Proposal[]; onOpen: (id: string) => void }) {
-  const titles = new Map<string, string>([...review.bugs, ...review.ideas, ...proposals].map((x) => [x.id, x.title]));
+function FeedbackPage({ review, proposals, bugGroups, onOpen }: { review: Review; proposals: Proposal[]; bugGroups: BugGroup[]; onOpen: (id: string) => void }) {
+  const titles = new Map<string, string>([...review.bugs, ...bugGroups, ...review.ideas, ...proposals, ...(review.improvements ?? [])].map((x) => [x.id, x.title]));
   const all = Object.values(review.decisions).filter((d) => titles.has(d.id));
   const dismissed = all.filter((d) => d.status === "dismissed");
   const notes = all.filter((d) => d.status !== "dismissed" && d.note);
@@ -692,7 +845,7 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
         </h1>
       </header>
       {all.length === 0 ? (
-        <p className="empty">Nothing yet. Dismiss a bug or design idea, or leave a note on one, and it shows up here for future scans.</p>
+        <p className="empty">Nothing yet. Dismiss a bug, design idea or improvement, or leave a note on one, and it shows up here for future scans.</p>
       ) : (
         <div className="board" style={boardCols(DISMISS_REASONS.length + 1)}>
           {DISMISS_REASONS.map(([key, label]) => {
@@ -714,11 +867,13 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
   );
 }
 
+const KIND_NAME: Record<Kind, string> = { bug: "Bug", bug_group: "Bug group", idea: "Design idea", proposal: "Redesign", improvement: "Improvement" };
+
 function FeedbackCard({ d, title, onOpen }: { d: Decision; title: string; onOpen: (id: string) => void }) {
   return (
     <button type="button" className="card text-card" onClick={() => onOpen(d.id)} aria-label={`${d.id}: ${title}. Open details`}>
       <span className="card-body">
-        <span className="card-id">{d.id} · {d.kind === "bug" ? "Bug" : d.kind === "proposal" ? "Redesign" : "Design idea"}</span>
+        <span className="card-id">{d.id} · {KIND_NAME[d.kind]}</span>
         <span className="card-title">{title}</span>
         {d.note && <span className="card-note">“{d.note}”</span>}
         <span className="card-meta">@{d.by}</span>
