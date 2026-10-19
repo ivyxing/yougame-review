@@ -372,5 +372,70 @@
    "console": []
   },
   "agent_prompt": "On yougame.co, gamer tags are shown on public leaderboards and comments with no apparent name filtering. Example: the Project+ ranked leaderboard (/g/project-rollback) shows a player named \"REMOTE CODE EXECUTION\" at #6, which reads as a security warning on a page that asks players to install a desktop emulator.\n\nFix:\n1. Find where gamer tags are created and changed (sign-up form \"Gamer tag\" field and the account settings endpoint).\n2. Add server-side validation: reject tags matching a blocklist of slurs and of system/security-scare phrases (e.g. \"remote code execution\", \"rce\", \"virus\", \"hacked\", \"admin\", \"moderator\", \"yougame\", \"support\", \"official\"), normalising case, spacing, leetspeak and repeated characters first. Return a clear error (\"Pick a different tag\").\n3. Give admins a way to reset a tag to a neutral default (\"Player1234\") and to flag a tag from the leaderboard or a comment via the existing Report flow.\n4. Run the new validator over existing tags and list matches for manual review; don't auto-rename.\n\nAcceptance: setting the tag \"Remote Code Execution\" fails with a helpful message; an admin can reset an existing offending tag."
+ },
+ {
+  "id": "BUG-14",
+  "title": "Leaving a Word Duel lobby leaves stale room controls in the page sidebar",
+  "severity": "low",
+  "area": "Game page / Lobby",
+  "url": "https://yougame.co/g/word-duel",
+  "status": "verified",
+  "summary": "After a signed-out player leaves a Word Duel friend lobby and returns to the game page, the sidebar still looks attached to the departed room. The Seats list is empty, Add local player remains enabled but does nothing, and room chat still targets the old room. Reloading restores the initial sidebar. This is a confusing dead-end in the page UI; the reproduction does not establish that multiplayer itself is broken.",
+  "steps": [
+   "In a fresh signed-out Chrome tab, open https://yougame.co/g/word-duel and press Play.",
+   "Inside the game, choose 1v1 Duel, then Play with a friend.",
+   "Confirm that the platform lobby opens with 1/2 seats and you as host.",
+   "Choose Leave lobby, then Back to the page.",
+   "Inspect the page sidebar, try Add local player, and inspect the Sign in link target in the CHAT panel.",
+   "Reload the page and compare the sidebar with the state immediately after leaving."
+  ],
+  "expected": "Leaving the lobby clears the page sidebar’s active room state. Returning to the page shows the initial “Invite friends and you all land in the same room” state, hides controls for the departed room, and removes its room-specific chat and sign-in target.",
+  "actual": "The Seats list is empty, but the sidebar still says “Choose players and start inside the game.” Add local player stays enabled and has no effect. The CHAT panel and its Sign in next URL still refer to the departed room. Reloading resets the sidebar correctly.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-14-page.jpg"
+   ],
+   "notes": [
+    "Verified by the cloud gameplay tester in two independent fresh signed-out Chrome tabs on Linux, approximately 1180×750, during the 2026-10-19 03:36–03:51 UTC playtest. Reproduction rooms: 9gfr833c and 8gmdzema.",
+    "The screenshot captures the reproduced post-leave state: Word Duel is back on its mode screen, while the page sidebar still shows Lobby, “Choose players and start inside the game”, Add local player, and room chat.",
+    "The empty Seats list, ineffective Add local player action, stale Sign in next URL, and reload recovery were checked during the interactive reproductions. The static screenshot alone does not demonstrate those interactions or the URL target.",
+    "Severity low / P3: stale room UI creates a confusing dead end after leaving. No claim that multiplayer itself is broken."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On https://yougame.co/g/word-duel, reproduce in a fresh signed-out session: Play → 1v1 Duel → Play with a friend → confirm the platform lobby has 1/2 seats with you as host → Leave lobby → Back to the page. The page sidebar retains “Choose players and start inside the game”, an enabled Add local player button that does nothing, and room chat whose Sign in next URL still targets the departed room. Its Seats list is empty. Reloading restores the initial sidebar.\n\nFind how the leave-lobby flow updates the page’s active room state and ensure returning to the page clears all state derived from the departed room. Restore the initial “Invite friends and you all land in the same room” sidebar, hide departed-room controls and chat, and remove the stale room target from the sign-in return URL. Avoid assuming the underlying multiplayer session or transport is broken.\n\nAcceptance: complete the sequence twice without reloading; each time the sidebar returns to its initial state and no control or link targets the departed room. Creating or joining a subsequent lobby shows only that current room’s state."
+ },
+ {
+  "id": "BUG-15",
+  "title": "Submitting search clears the selected player filter and sort",
+  "severity": "low",
+  "area": "Search / Filters",
+  "url": "https://yougame.co/?q=Word+Duel&players=multi&sort=new",
+  "status": "verified",
+  "summary": "Submitting the homepage search again without changing the query silently removes the selected player-count filter and sort. Multiplayer and Newest clear and For you becomes selected. A separate reproduction with RPG, Single player, and Newest retained the genre while dropping player mode and sort, so search preserves these controls inconsistently.",
+  "steps": [
+   "Open https://yougame.co/ and search for Word Duel.",
+   "Select Multiplayer, then Newest.",
+   "Confirm that Multiplayer and Newest are selected and the URL is https://yougame.co/?q=Word+Duel&players=multi&sort=new.",
+   "Click Search again without changing Word Duel in the search field.",
+   "Compare the URL and selected controls before and after submitting."
+  ],
+  "expected": "Submitting an unchanged search query preserves the current player filter, sort, and genre. The URL retains players=multi and sort=new, and Multiplayer and Newest remain selected.",
+  "actual": "The URL becomes https://yougame.co/?q=Word+Duel. Multiplayer and Newest are no longer selected, and For you is selected instead. In a separate check starting with RPG, Single player, and Newest, submitting Word Duel kept genre=RPG but discarded players and sort.",
+  "evidence": {
+   "screenshots": [
+    "screenshots/bugs/bug-15-before.jpg",
+    "screenshots/bugs/bug-15-after.jpg"
+   ],
+   "notes": [
+    "Verified by the cloud gameplay tester in signed-out Chrome on Linux, approximately 1180×750, during the 2026-10-19 03:36–03:51 UTC playtest. Primary reproduction: search Word Duel → Multiplayer → Newest → submit the same search again.",
+    "Before screenshot: Word Duel query, selected Multiplayer and Newest controls, and result text “1 game matches ‘Word Duel’ (multiplayer)”. After screenshot: the same query, neither player mode selected, For you selected, and the multiplayer qualifier removed from the result text.",
+    "The URL transition was checked interactively: https://yougame.co/?q=Word+Duel&players=multi&sort=new → https://yougame.co/?q=Word+Duel. The screenshots show the selected controls and result text; they do not include the browser address bar.",
+    "Independent reproduction path: begin with RPG + Single player + Newest, then submit Word Duel. The resulting URL retains genre=RPG but discards players and sort.",
+    "Severity low / P3: a search submission silently resets discovery state. This is separate from UX-02, which addresses visual grouping and clarity of filter controls."
+   ],
+   "console": []
+  },
+  "agent_prompt": "On yougame.co, search Word Duel, select Multiplayer and Newest, and confirm the URL is /?q=Word+Duel&players=multi&sort=new. Click Search again without changing the query. The URL becomes /?q=Word+Duel, Multiplayer and Newest clear, and For you is restored. A separate reproduction starting with RPG + Single player + Newest retains genre=RPG when searching Word Duel, but drops players and sort.\n\nFind the search submission logic and preserve the current player filter, sort, and genre when updating the query. Keep the URL, selected controls, and displayed results consistent. Change these settings only through their explicit controls or a clearly requested reset.\n\nAcceptance: resubmitting an identical query preserves players=multi and sort=new and keeps Multiplayer and Newest selected. Searching Word Duel from RPG + Single player + Newest preserves all three selections. Verify both the URL parameters and the visible selected state. This fix concerns search-state persistence; it does not require redesigning the filter row."
  }
 ]
