@@ -282,7 +282,7 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
           { key: "all", label: "All", count: bugs.length },
         ]}
       />
-      <div className="board" style={{ ["--cols" as string]: SEVERITIES.length }}>
+      <div className="board" style={boardCols(SEVERITIES.filter((sev) => shown.some((b) => b.severity === sev)).length)}>
         {shown.length === 0 && <p className="none">None</p>}
         {SEVERITIES.map((sev) => {
           const items = shown.filter((b) => b.severity === sev);
@@ -355,7 +355,7 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
       )}
       <section className="group" aria-labelledby="other-ideas-title">
         {grouped.proposals.length > 0 && <h2 id="other-ideas-title" className="group-title">Other ideas <span className="count">· {shown.length}</span></h2>}
-        <div className="board" style={{ ["--cols" as string]: PRIORITIES.length }}>
+        <div className="board" style={boardCols(PRIORITIES.filter((p) => shown.some((i) => (i.priority ?? "low") === p)).length)}>
           {shown.length === 0 && <p className="none">None</p>}
           {PRIORITIES.map((p) => {
             const items = shown.filter((i) => (i.priority ?? "low") === p);
@@ -694,7 +694,7 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
       {all.length === 0 ? (
         <p className="empty">Nothing yet. Dismiss a bug or design idea, or leave a note on one, and it shows up here for future scans.</p>
       ) : (
-        <div className="board" style={{ ["--cols" as string]: DISMISS_REASONS.length + 1 }}>
+        <div className="board" style={boardCols(DISMISS_REASONS.length + 1)}>
           {DISMISS_REASONS.map(([key, label]) => {
             const items = dismissed.filter((d) => d.reason === key);
             return (
@@ -726,4 +726,10 @@ function FeedbackCard({ d, title, onOpen }: { d: Decision; title: string; onOpen
       <span className="examine" aria-hidden="true"><Examine /></span>
     </button>
   );
+}
+
+// A board has one track per visible column, and at most two on narrower screens.
+function boardCols(n: number) {
+  const cols = Math.max(1, n);
+  return { ["--cols" as string]: cols, ["--cols-narrow" as string]: Math.min(cols, 2) } as React.CSSProperties;
 }
