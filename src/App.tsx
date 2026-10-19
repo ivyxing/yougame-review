@@ -283,15 +283,17 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
         ]}
       />
       <div className="board" style={{ ["--cols" as string]: SEVERITIES.length }}>
+        {shown.length === 0 && <p className="none">None</p>}
         {SEVERITIES.map((sev) => {
           const items = shown.filter((b) => b.severity === sev);
+          if (items.length === 0) return null;
           return (
             <section key={sev} className="column" aria-label={`${cap(sev)} severity`}>
               <h2 className="column-title">
                 <span className={`sev-mark sev-${sev}`} aria-hidden="true" />
                 {cap(sev)} <span className="count">· {items.length}</span>
               </h2>
-              {items.length === 0 ? <p className="none">None</p> : items.map((b) => (
+              {items.map((b) => (
                 <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} onOpen={onOpen} />
               ))}
             </section>
@@ -354,15 +356,17 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
       <section className="group" aria-labelledby="other-ideas-title">
         {grouped.proposals.length > 0 && <h2 id="other-ideas-title" className="group-title">Other ideas <span className="count">· {shown.length}</span></h2>}
         <div className="board" style={{ ["--cols" as string]: PRIORITIES.length }}>
+          {shown.length === 0 && <p className="none">None</p>}
           {PRIORITIES.map((p) => {
             const items = shown.filter((i) => (i.priority ?? "low") === p);
+            if (items.length === 0) return null;
             return (
               <section key={p} className="column" aria-label={`${cap(p)} priority`}>
                 <h3 className="column-title">
                   <span className={`sev-mark pri-${p}`} aria-hidden="true" />
                   {cap(p)} priority <span className="count">· {items.length}</span>
                 </h3>
-                {items.length === 0 ? <p className="none">None</p> : items.map((i) => (
+                {items.map((i) => (
                   <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} onOpen={onOpen} />
                 ))}
               </section>
