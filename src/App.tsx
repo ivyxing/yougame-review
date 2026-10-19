@@ -282,17 +282,19 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
           { key: "all", label: "All", count: bugs.length },
         ]}
       />
-      <div className="board" style={{ ["--cols" as string]: SEVERITIES.length }}>
+      <div className="board" style={boardCols(SEVERITIES.filter((sev) => shown.some((b) => b.severity === sev)).length)}>
+        {shown.length === 0 && <p className="none">None</p>}
         {SEVERITIES.map((sev) => {
           const items = shown.filter((b) => b.severity === sev);
+          if (items.length === 0) return null;
           return (
             <section key={sev} className="column" aria-label={`${cap(sev)} severity`}>
               <h2 className="column-title">
                 <span className={`sev-mark sev-${sev}`} aria-hidden="true" />
                 {cap(sev)} <span className="count">· {items.length}</span>
               </h2>
-              {items.length === 0 ? <p className="none">None</p> : items.map((b) => (
-                <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} prompt={b.agent_prompt} onOpen={onOpen} say={say} />
+              {items.map((b) => (
+                <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} onOpen={onOpen} />
               ))}
             </section>
           );
@@ -345,7 +347,7 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
             {shownProposals.map((p) => {
               const answered = p.ideas.filter((id) => decisions[id]).length;
               return (
-                <Card key={p.id} id={p.id} wide title={p.title} meta={`${p.ideas.length} ideas${answered ? ` · ${answered} answered on their own` : ""}`} status={pst(p) === "open" ? undefined : statusText("proposal", pst(p), decisions[p.id])} thumbs={[p.before_screenshot, p.after_image].filter(Boolean) as string[]} prompt={proposalPrompt(p, ideas)} promptKind="design" onOpen={onOpen} say={say} />
+                <Card key={p.id} id={p.id} wide title={p.title} meta={`${p.ideas.length} ideas${answered ? ` · ${answered} answered on their own` : ""}`} status={pst(p) === "open" ? undefined : statusText("proposal", pst(p), decisions[p.id])} thumbs={[p.before_screenshot, p.after_image].filter(Boolean) as string[]} onOpen={onOpen} />
               );
             })}
           </div>
@@ -353,17 +355,19 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
       )}
       <section className="group" aria-labelledby="other-ideas-title">
         {grouped.proposals.length > 0 && <h2 id="other-ideas-title" className="group-title">Other ideas <span className="count">· {shown.length}</span></h2>}
-        <div className="board" style={{ ["--cols" as string]: PRIORITIES.length }}>
+        <div className="board" style={boardCols(PRIORITIES.filter((p) => shown.some((i) => (i.priority ?? "low") === p)).length)}>
+          {shown.length === 0 && <p className="none">None</p>}
           {PRIORITIES.map((p) => {
             const items = shown.filter((i) => (i.priority ?? "low") === p);
+            if (items.length === 0) return null;
             return (
               <section key={p} className="column" aria-label={`${cap(p)} priority`}>
                 <h3 className="column-title">
                   <span className={`sev-mark pri-${p}`} aria-hidden="true" />
                   {cap(p)} priority <span className="count">· {items.length}</span>
                 </h3>
-                {items.length === 0 ? <p className="none">None</p> : items.map((i) => (
-                  <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} prompt={i.agent_prompt} promptKind="design" onOpen={onOpen} say={say} />
+                {items.map((i) => (
+                  <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} onOpen={onOpen} />
                 ))}
               </section>
             );
@@ -386,7 +390,7 @@ function promptBundle(head: string, items: { id: string; title: string; agent_pr
   return `${head}\n\n${items.map((i) => `## ${i.id}: ${i.title}\n\n${i.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
-function Card({ id, title, meta, status, thumbs, prompt, promptKind = "fix", wide, onOpen, say }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; prompt?: string; promptKind?: "fix" | "design"; wide?: boolean; onOpen: (id: string) => void; say: (m: string) => void }) {
+function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; wide?: boolean; onOpen: (id: string) => void }) {
   return (
     <div className={`card-shell${wide ? " wide" : ""}`}>
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
@@ -403,11 +407,6 @@ function Card({ id, title, meta, status, thumbs, prompt, promptKind = "fix", wid
       </span>
       <span className="examine" aria-hidden="true"><Examine /></span>
     </button>
-    {prompt && (
-      <button type="button" className="card-copy" aria-label={`Copy the ${promptKind} prompt for ${id}`} onClick={() => copyText(prompt, say, `${cap(promptKind)} prompt for ${id} copied`)}>
-        <Copy /> Copy {promptKind} prompt
-      </button>
-    )}
     </div>
   );
 }
@@ -695,7 +694,7 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
       {all.length === 0 ? (
         <p className="empty">Nothing yet. Dismiss a bug or design idea, or leave a note on one, and it shows up here for future scans.</p>
       ) : (
-        <div className="board" style={{ ["--cols" as string]: DISMISS_REASONS.length + 1 }}>
+        <div className="board" style={boardCols(DISMISS_REASONS.length + 1)}>
           {DISMISS_REASONS.map(([key, label]) => {
             const items = dismissed.filter((d) => d.reason === key);
             return (
@@ -727,4 +726,10 @@ function FeedbackCard({ d, title, onOpen }: { d: Decision; title: string; onOpen
       <span className="examine" aria-hidden="true"><Examine /></span>
     </button>
   );
+}
+
+// A board has one track per visible column, and at most two on narrower screens.
+function boardCols(n: number) {
+  const cols = Math.max(1, n);
+  return { ["--cols" as string]: cols, ["--cols-narrow" as string]: Math.min(cols, 2) } as React.CSSProperties;
 }
