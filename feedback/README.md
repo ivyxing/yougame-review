@@ -21,8 +21,8 @@
 
 | Field | Values |
 | --- | --- |
-| `kind` | `bug` or `idea` |
-| `status` | Bugs: `open`, `fixing`, `fixed`, `dismissed`. Design ideas: `open`, `planned` (Will do), `later`, `done`, `dismissed`. |
+| `kind` | `bug`, `idea`, or `proposal` (a redesign from `data/proposals.json`) |
+| `status` | Bugs: `open`, `fixing`, `fixed`, `dismissed`. Design ideas and redesigns: `open`, `planned` (Will do), `later`, `done`, `dismissed`. An idea with no decision of its own follows its redesign's decision. |
 | `reason` | Only when dismissed: `edge_case` (too edge case), `dont_do`, `not_a_problem`, `duplicate`. |
 | `note` | Free text from the person deciding. |
 

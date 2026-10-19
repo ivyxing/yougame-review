@@ -1,7 +1,7 @@
 // Shared by the browser app and the server functions.
 
 export type Severity = "critical" | "high" | "medium" | "low";
-export type Kind = "bug" | "idea";
+export type Kind = "bug" | "idea" | "proposal";
 
 export interface Evidence {
   screenshots?: string[];
@@ -40,6 +40,21 @@ export interface Idea {
   agent_prompt?: string;
 }
 
+/** A redesign that answers several ideas at once, shown with its mock. */
+export interface Proposal {
+  id: string;
+  title: string;
+  area?: string;
+  page_url?: string;
+  summary?: string;
+  before_screenshot?: string | null;
+  after_image?: string | null;
+  figma_url?: string | null;
+  /** Ids of the ideas this redesign covers. */
+  ideas: string[];
+  agent_prompt?: string;
+}
+
 export const BUG_STATUSES = ["open", "fixing", "fixed", "dismissed"] as const;
 export const IDEA_STATUSES = ["open", "planned", "later", "done", "dismissed"] as const;
 export type BugStatus = (typeof BUG_STATUSES)[number];
@@ -49,6 +64,7 @@ export type Status = BugStatus | IdeaStatus;
 export const STATUS_LABEL: Record<Kind, Record<string, string>> = {
   bug: { open: "Open", fixing: "Fixing", fixed: "Fixed", dismissed: "Dismissed" },
   idea: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
+  proposal: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
 };
 
 export const DISMISS_REASONS = [
@@ -100,8 +116,24 @@ export function bugStatus(bug: Bug, decision?: Decision): BugStatus {
   return bug.status === "fixed" ? "fixed" : "open";
 }
 
-export function ideaStatus(_idea: Idea, decision?: Decision): IdeaStatus {
-  return (decision?.status as IdeaStatus) ?? "open";
+/** An idea without its own decision follows the redesign it belongs to. */
+export function ideaStatus(_idea: Idea, decision?: Decision, parent?: Decision): IdeaStatus {
+  return (decision?.status as IdeaStatus) ?? (parent?.status as IdeaStatus) ?? "open";
+}
+
+/** Maps each grouped idea to its redesign; proposals with fewer than two known ideas are dropped. */
+export function groupIdeas(ideas: Idea[], proposals: Proposal[]): { proposals: Proposal[]; parentOf: Map<string, Proposal>; standalone: Idea[] } {
+  const known = new Set(ideas.map((i) => i.id));
+  const parentOf = new Map<string, Proposal>();
+  const kept: Proposal[] = [];
+  for (const p of proposals) {
+    const members = p.ideas.filter((id) => known.has(id) && !parentOf.has(id));
+    if (members.length < 2) continue;
+    const group = { ...p, ideas: members };
+    kept.push(group);
+    for (const id of members) parentOf.set(id, group);
+  }
+  return { proposals: kept, parentOf, standalone: ideas.filter((i) => !parentOf.has(i.id)) };
 }
 
 export const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];

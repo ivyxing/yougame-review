@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bugStatus, bugThumbnail, validateDecision, type Kind } from "../src/model.ts";
+import { bugStatus, bugThumbnail, groupIdeas, ideaStatus, validateDecision, type Decision, type Idea, type Kind } from "../src/model.ts";
 import { serializeDecisions, writeDecision } from "../server/github.ts";
 
 const known = new Map<string, Kind>([["BUG-01", "bug"], ["UX-01", "idea"]]);
@@ -44,4 +44,20 @@ test("writeDecision retries once when another save landed first", async () => {
   const result = await writeDecision("t", "dev", { id: "BUG-01", kind: "bug", status: "fixed" }, transport, new Date("2026-10-18T00:00:00Z"));
   assert.equal(puts, 2);
   assert.deepEqual(result["BUG-01"], { id: "BUG-01", kind: "bug", status: "fixed", by: "dev", at: "2026-10-18T00:00:00.000Z" });
+});
+
+test("redesigns group their ideas and ideas follow the redesign decision", () => {
+  const ideas = [{ id: "UX-01", title: "a" }, { id: "UX-02", title: "b" }, { id: "UX-03", title: "c" }] as Idea[];
+  const g = groupIdeas(ideas, [
+    { id: "RD-01", title: "Home", ideas: ["UX-01", "UX-02", "UX-99"] },
+    { id: "RD-02", title: "Lonely", ideas: ["UX-03"] },
+  ]);
+  assert.deepEqual(g.proposals.map((p) => [p.id, p.ideas]), [["RD-01", ["UX-01", "UX-02"]]]);
+  assert.deepEqual(g.standalone.map((i) => i.id), ["UX-03"]);
+  const parent = { id: "RD-01", kind: "proposal", status: "planned", by: "x", at: "t" } as Decision;
+  assert.equal(ideaStatus(ideas[0], undefined, parent), "planned");
+  assert.equal(ideaStatus(ideas[0], { ...parent, id: "UX-01", kind: "idea", status: "dismissed" }, parent), "dismissed");
+  const known = new Map<string, Kind>([["RD-01", "proposal"]]);
+  assert.equal(validateDecision({ id: "RD-01", kind: "proposal", status: "later" }, known).status, "later");
+  assert.throws(() => validateDecision({ id: "RD-01", kind: "proposal", status: "fixing" }, known));
 });
