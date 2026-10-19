@@ -11,6 +11,7 @@ A review site for [yougame.co](https://yougame.co): bugs found in beta testing, 
 | `server/` | Shared server code: session, GitHub reads and writes, findings on disk. |
 | `data/bugs.json`, `data/ux.json` | The findings. Edit them to add, reword or remove items. |
 | `data/proposals.json` | Redesigns: one mock that answers several design ideas, listed by id in `ideas`. Ideas in a redesign show inside it instead of on the board. |
+| `data/bug-groups.json` | Bug groups: bugs similar enough to fix together, listed by id in `bugs`. They show as one card on the Bugs board, in the column of the most severe bug, and its bugs follow the group's decision unless decided on separately. |
 | `data/improvements.json` | Improvements: feature, engagement and creator ideas beyond bugs and design fixes. Same fields as a design idea, plus `effort` (`small`, `medium`, `large`) and `related` (ids it builds on). The tab is hidden when the file is missing or empty. |
 | `screenshots/` | Evidence screenshots and redesign mocks, referenced from the JSON. |
 | `feedback/decisions.json` | Saved decisions. Written by the site, one commit per save. |

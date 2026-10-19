@@ -34,20 +34,21 @@
  },
  {
   "id": "IM-03",
-  "title": "Show which games play on a phone, and filter by it",
+  "title": "Show what you can play right now, on this device",
   "area": "Discovery",
   "priority": "high",
-  "effort": "medium",
+  "effort": "large",
   "page_url": "https://yougame.co/?sort=top",
   "before_screenshot": "screenshots/ux/UX-01-full.png",
   "related": [
    "UX-03",
+   "UX-06",
    "BUG-11"
   ],
-  "problem": "GlobeTap's page says \"Plays on phones\", but the homepage doesn't say which games do, and there's no way to filter by it. Emulator games, which need the desktop app on Apple silicon Mac or Windows, are shown to phone visitors exactly like everything else.",
-  "why_it_matters": "Much casual traffic comes from phones and from links shared in chats. A phone visitor who taps an emulator game hits a dead end; one who finds a game that just works is likely to stay and share it.",
-  "recommendation": "Add a \"Plays here\" filter that defaults to games that run on the visitor's device (browser and phone-friendly games on phones; everything on a supported desktop). Mark phone-friendly games on cards, and on an unsupported device, replace Play on emulator games with \"Send to my computer\" (email or copy link).",
-  "agent_prompt": "On yougame.co, make discovery device-aware. (1) Give each game a supported-devices field derived from what exists today: browser games marked \"Plays on phones\" -> phone + desktop; browser games without it -> desktop; emulator games -> desktop app on Apple silicon Mac or Windows. (2) Detect the visitor's device class client-side (touch + small viewport = phone; platform for Mac/Windows/Linux). (3) Add a \"Plays here\" option to the homepage filters, on by default on phones and off by default on desktop, persisted in the URL. (4) On cards, show a phone mark for phone-friendly games. (5) On an emulator game page viewed from an unsupported device, replace the Play button with \"Send to my computer\", which copies the page link or emails it to a signed-in player. Keep existing URLs working."
+  "problem": "GlobeTap's page says \"Plays on phones\", but the homepage doesn't say which games do, and there's no way to filter by it. Emulator games, which need the desktop app on Apple silicon Mac or Windows, are shown to phone visitors exactly like everything else. And for players who did set up the desktop app and added a disc, every emulator card still says \"Needs your own copy\".",
+  "why_it_matters": "A visitor's first question is \"can I play this here, now?\". Phone visitors who tap an emulator game hit a dead end, and players who finished the hard setup never see the payoff: every remix of a game they own is one click away.",
+  "recommendation": "Add a \"Plays here\" filter that defaults to games that run on the visitor's device (browser and phone-friendly games on phones; everything on a supported desktop). Mark phone-friendly games on cards, and on an unsupported device, replace Play on emulator games with \"Send to my computer\" (email or copy link). When the desktop app is present and has a disc for a base game, swap \"Needs your own copy\" for \"Ready to play\" on every game built on it, and add a \"Ready to play\" row at the top of the homepage.",
+  "agent_prompt": "On yougame.co, make discovery device-aware. (1) Give each game a supported-devices field derived from what exists today: browser games marked \"Plays on phones\" -> phone + desktop; browser games without it -> desktop; emulator games -> desktop app on Apple silicon Mac or Windows. (2) Detect the visitor's device class client-side (touch + small viewport = phone; platform for Mac/Windows/Linux). (3) Add a \"Plays here\" option to the homepage filters, on by default on phones and off by default on desktop, persisted in the URL. (4) On cards, show a phone mark for phone-friendly games. (5) On an emulator game page viewed from an unsupported device, replace the Play button with \"Send to my computer\", which copies the page link or emails it to a signed-in player. Keep existing URLs working.\n\nThen reflect the player's emulator setup: (6) Expose from the YG desktop app (via the existing app-detection channel the game page uses for \"Not on this computer yet\") the list of base games the player has a verified disc for; never expose file paths. Cache it client-side for the session. (7) On cards for games whose base game is in that list, replace the \"Needs your own copy\" badge with \"Ready to play\" (same position and size, a different colour family). (8) On the homepage, when at least one game is ready, add a \"Ready to play\" row above the feed, most recently played first. (9) Fall back to today's behaviour when the app isn't detected."
  },
  {
   "id": "IM-04",
@@ -68,53 +69,20 @@
  },
  {
   "id": "IM-05",
-  "title": "Mark games \"Ready to play\" once you've set them up",
-  "area": "Discovery",
-  "priority": "medium",
-  "effort": "medium",
-  "page_url": "https://yougame.co/?sort=top",
-  "before_screenshot": "screenshots/ux/UX-03.png",
-  "related": [
-   "UX-03",
-   "UX-06"
-  ],
-  "problem": "Every emulator card says \"Needs your own copy\" even for a player who has already installed the desktop app and added that disc. Game pages say \"Not on this computer yet\" or \"No copy stored yet\", but cards never reflect it.",
-  "why_it_matters": "Players who've done the hard setup should see the payoff: every remix of a base game they own is one click away. Today the site keeps treating them like newcomers, which hides how much they can already play.",
-  "recommendation": "When the desktop app is present and has a disc for a base game, swap \"Needs your own copy\" for \"Ready to play\" on every game built on it, and add a \"Ready to play\" shelf at the top of the homepage for that player.",
-  "agent_prompt": "On yougame.co, reflect the player's emulator setup across the site. (1) Expose from the YG desktop app (via the existing app-detection channel the game page uses for \"Not on this computer yet\") the list of base games the player has a verified disc for; never expose file paths. (2) Cache it client-side for the session. (3) On cards for games whose base game is in that list, replace the \"Needs your own copy\" badge with \"Ready to play\" (same position and size, a different colour family). (4) On the homepage, when at least one game is ready, add a \"Ready to play\" row above the feed, listing those games by most recently played. (5) Fall back to today's behaviour when the app isn't detected."
- },
- {
-  "id": "IM-06",
-  "title": "Turn GlobeTap's \"daily five\" into a site-wide daily challenge",
+  "title": "Daily challenges with results people can share",
   "area": "Engagement",
   "priority": "medium",
-  "effort": "medium",
+  "effort": "large",
   "page_url": "https://yougame.co/g/globetap",
   "before_screenshot": "screenshots/ux/UX-10.png",
   "related": [],
-  "problem": "GlobeTap already has a \"daily five\", and Perfect Circle has a leaderboard, but both live only inside their own game pages. Nothing on the homepage gives a returning player a reason to come back today.",
-  "why_it_matters": "A daily challenge with a streak is one of the most reliable ways to build a habit, and it costs little when games already have a daily mode or a score.",
-  "recommendation": "Add a \"Today\" row on the homepage: one daily challenge per participating game, with your streak and how many people played it today. Let creators opt in by exposing a daily seed and a score.",
-  "agent_prompt": "Add daily challenges to yougame.co. (1) Define an opt-in contract for games: a daily seed provided by YouGame (date-based, same for everyone) and a score event at the end of the daily round. Start with GlobeTap's existing daily five. (2) Store one daily result per player per game per day (guests in localStorage, merged on sign-in). (3) On the homepage, add a \"Today\" row above the feed showing each participating game's daily challenge with: played or not, your score, your streak in days, and how many players finished today. (4) Each tile opens the game straight into the daily mode. (5) Reset at 00:00 UTC and say so in an info tip next to the row title. Add tests for streak counting across day boundaries."
+  "problem": "GlobeTap already has a \"daily five\", and Perfect Circle has a leaderboard, but both live only inside their own game pages. Nothing on the homepage gives a returning player a reason to come back today. And after a round there's nothing to share: Share and \"Copy invite link\" only share the game page.",
+  "why_it_matters": "A daily challenge with a streak is one of the most reliable ways to build a habit, and it costs little when games already have a daily mode or a score. A result someone is proud of spreads much further than a plain link, and a \"beat my score\" link brings the friend straight into the same challenge.",
+  "recommendation": "Add a \"Today\" row on the homepage: one daily challenge per participating game, with your streak and how many people played it today. Let creators opt in by exposing a daily seed and a score. After a round, offer \"Share result\": a small image card with the game, score and day, plus a link that opens the same challenge with \"Beat <name>'s score\" on top.",
+  "agent_prompt": "Add daily challenges to yougame.co. (1) Define an opt-in contract for games: a daily seed provided by YouGame (date-based, same for everyone) and a score event at the end of the daily round. Start with GlobeTap's existing daily five. (2) Store one daily result per player per game per day (guests in localStorage, merged on sign-in). (3) On the homepage, add a \"Today\" row above the feed showing each participating game's daily challenge with: played or not, your score, your streak in days, and how many players finished today. (4) Each tile opens the game straight into the daily mode. (5) Reset at 00:00 UTC and say so in an info tip next to the row title. Add tests for streak counting across day boundaries.\n\nThen make results shareable: (6) Generate an Open Graph image at /r/<id> (1200x630) with the game cover, the score, the player's display name and the date; store the result with its seed. (7) After a round, show a \"Share result\" button using the Web Share API when available, falling back to copying the link. (8) Visiting /r/<id> opens the game with a banner \"Beat <name>'s <score>\" and starts the same seed. (9) Never include anything private; guests are \"A player\"."
  },
  {
-  "id": "IM-07",
-  "title": "Shareable result cards after a round",
-  "area": "Growth",
-  "priority": "medium",
-  "effort": "medium",
-  "page_url": "https://yougame.co/g/globetap",
-  "before_screenshot": "screenshots/ux/UX-10.png",
-  "related": [
-   "IM-06"
-  ],
-  "problem": "Game pages have Share and \"Copy invite link\", which share the game page itself. There's nothing to share after you play: no score, no result, no \"beat me\" link.",
-  "why_it_matters": "A result someone is proud of spreads much further than a plain link, and a \"beat my score\" link brings the friend straight into the same challenge.",
-  "recommendation": "After a round, offer \"Share result\": a small image card with the game, score and day, plus a link that opens the same challenge with \"Beat <name>'s score\" on top.",
-  "agent_prompt": "Add shareable results to yougame.co. (1) Let games emit a result event {score, label, seed?} at the end of a round (reuse the score event if it exists). (2) Generate an Open Graph image at /r/<id> (1200x630) with the game cover, the score, the player's display name and the date; store the result record with the seed so the challenge can be replayed. (3) After a round, show a \"Share result\" button that uses the Web Share API when available and falls back to copying the link. (4) Visiting /r/<id> opens the game page with a banner \"Beat <name>'s <score>\" and starts the same seed. (5) Never include anything private; guests are \"A player\"."
- },
- {
-  "id": "IM-08",
+  "id": "IM-06",
   "title": "Tell followers when a game they play gets an update",
   "area": "Engagement",
   "priority": "low",
@@ -131,7 +99,7 @@
   "agent_prompt": "Add update notifications to yougame.co. (1) When a creator publishes a new version with release notes, create a notification for players who saved the game, played it in the last 60 days, or follow the creator. (2) Add a bell to the header with an unread count and a panel listing notifications (game cover, \"v1.9: <first line of notes>\", time), each opening the game page scrolled to \"What's new\". (3) Show an \"Updated\" label on game cards for 7 days after a release. (4) Replace the global \"A YG Dolphin update is out\" banner with a notification sent only to players whose desktop app reports an older version. (5) Add an email digest preference, off by default."
  },
  {
-  "id": "IM-09",
+  "id": "IM-07",
   "title": "A creator dashboard for plays, ratings and questions",
   "area": "Creators",
   "priority": "medium",
@@ -148,7 +116,7 @@
   "agent_prompt": "Build a creator dashboard on yougame.co at /studio (visible to a game's owners only). For each of the creator's games show: (1) plays and unique players per day for the last 30 days, as a small line chart; (2) rating average and count, with the last 10 ratings; (3) if analytics events from the emulator setup exist, the setup funnel drop-off; (4) an \"Unanswered\" list of top-level comments with no reply from the creator, grouped by similarity (embedding or keyword clustering, cluster label = most common phrase), each group with \"Reply to all\" and \"Add to known issues\" (which creates a pinned known-issue entry shown above comments on the game page). Use existing data and auth; add tests for owner-only access."
  },
  {
-  "id": "IM-10",
+  "id": "IM-08",
   "title": "Let people start an upload before they sign up",
   "area": "Upload",
   "priority": "medium",
@@ -166,7 +134,7 @@
   "agent_prompt": "On yougame.co, let signed-out visitors start an upload. (1) Make /upload accessible without an account. (2) Support the existing three inputs (paste HTML, drop a file, import a link) into a draft stored server-side with an unguessable draft id kept in a cookie, expiring after 24 hours. (3) Show the game running in the same sandboxed frame used for published games, labelled \"Private preview\". (4) The Publish button asks signed-out users to sign up or sign in (Apple and Google first), then returns to the draft and publishes it. (5) Apply the same size limits, validation and rate limiting as today, plus a per-IP draft limit. Keep the existing signed-in flow unchanged."
  },
  {
-  "id": "IM-11",
+  "id": "IM-09",
   "title": "Keep offensive or misleading names off leaderboards",
   "area": "Moderation",
   "priority": "medium",
@@ -182,7 +150,7 @@
   "agent_prompt": "Add name safety to yougame.co. (1) Validate display names and gamer tags on create and change against a configurable blocklist (slurs, \"admin\"/\"YouGame staff\" impersonation, and alarming phrases such as \"remote code execution\", \"hacked\", \"virus\"), case- and spacing-insensitive, with a clear error. (2) Add a \"Report name\" action to each leaderboard row's overflow menu that files a report into the existing Report content queue with the row's player id. (3) Give moderators a \"Reset name\" action that sets the name to \"Player<4 digits>\" and notifies the player. (4) Run the blocklist once over existing names and list matches for review rather than changing them automatically."
  },
  {
-  "id": "IM-12",
+  "id": "IM-10",
   "title": "Count demand for Linux and Steam Deck",
   "area": "Platform",
   "priority": "low",

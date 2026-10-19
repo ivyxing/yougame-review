@@ -1,7 +1,7 @@
 // Shared by the browser app and the server functions.
 
 export type Severity = "critical" | "high" | "medium" | "low";
-export type Kind = "bug" | "idea" | "proposal" | "improvement";
+export type Kind = "bug" | "bug_group" | "idea" | "proposal" | "improvement";
 
 export interface Evidence {
   screenshots?: string[];
@@ -40,6 +40,17 @@ export interface Idea {
   agent_prompt?: string;
 }
 
+/** Bugs similar enough to fix together, shown as one card. */
+export interface BugGroup {
+  id: string;
+  title: string;
+  area?: string;
+  summary?: string;
+  /** Ids of the bugs in this group. */
+  bugs: string[];
+  agent_prompt?: string;
+}
+
 /** A redesign that answers several ideas at once, shown with its mock. */
 export interface Proposal {
   id: string;
@@ -70,6 +81,7 @@ export type Status = BugStatus | IdeaStatus;
 
 export const STATUS_LABEL: Record<Kind, Record<string, string>> = {
   bug: { open: "Open", fixing: "Fixing", fixed: "Fixed", dismissed: "Dismissed" },
+  bug_group: { open: "Open", fixing: "Fixing", fixed: "Fixed", dismissed: "Dismissed" },
   idea: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
   proposal: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
   improvement: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
@@ -106,7 +118,7 @@ export function validateDecision(input: unknown, known: Map<string, Kind>): Deci
   const { id, kind, status, reason, note } = input as Record<string, unknown>;
   if (typeof id !== "string" || known.get(id) === undefined) throw new Error("Unknown item.");
   if (kind !== known.get(id)) throw new Error("Item kind does not match.");
-  const allowed: readonly string[] = kind === "bug" ? BUG_STATUSES : IDEA_STATUSES;
+  const allowed: readonly string[] = isBugKind(kind as Kind) ? BUG_STATUSES : IDEA_STATUSES;
   if (typeof status !== "string" || !allowed.includes(status)) throw new Error("Unknown status.");
   let cleanReason: DismissReason | undefined;
   if (status === "dismissed") {
@@ -119,9 +131,27 @@ export function validateDecision(input: unknown, known: Map<string, Kind>): Deci
   return { id, kind: kind as Kind, status: status as Status, ...(cleanReason ? { reason: cleanReason } : {}), ...(cleanNote ? { note: cleanNote } : {}) };
 }
 
-export function bugStatus(bug: Bug, decision?: Decision): BugStatus {
+export const isBugKind = (kind: Kind) => kind === "bug" || kind === "bug_group";
+
+/** A bug without its own decision follows its group's decision. */
+export function bugStatus(bug: Bug, decision?: Decision, parent?: Decision): BugStatus {
   if (decision) return decision.status as BugStatus;
+  if (parent) return parent.status as BugStatus;
   return bug.status === "fixed" ? "fixed" : "open";
+}
+
+/** A group is fixed once every bug in it is, until someone decides on the group itself. */
+export function bugGroupStatus(group: BugGroup, decisions: Decisions, bugs: Bug[]): BugStatus {
+  const own = decisions[group.id];
+  if (own) return own.status as BugStatus;
+  const members = bugs.filter((b) => group.bugs.includes(b.id));
+  return members.length > 0 && members.every((b) => bugStatus(b, decisions[b.id]) === "fixed") ? "fixed" : "open";
+}
+
+/** The most severe severity among a group's bugs. */
+export function groupSeverity(group: BugGroup, bugs: Bug[]): Severity {
+  const levels = bugs.filter((b) => group.bugs.includes(b.id)).map((b) => SEVERITIES.indexOf(b.severity));
+  return SEVERITIES[Math.min(...levels)] ?? "low";
 }
 
 /** An idea without its own decision follows the redesign it belongs to. */
@@ -129,19 +159,28 @@ export function ideaStatus(_idea: Idea, decision?: Decision, parent?: Decision):
   return (decision?.status as IdeaStatus) ?? (parent?.status as IdeaStatus) ?? "open";
 }
 
-/** Maps each grouped idea to its redesign; proposals with fewer than two known ideas are dropped. */
-export function groupIdeas(ideas: Idea[], proposals: Proposal[]): { proposals: Proposal[]; parentOf: Map<string, Proposal>; standalone: Idea[] } {
-  const known = new Set(ideas.map((i) => i.id));
-  const parentOf = new Map<string, Proposal>();
-  const kept: Proposal[] = [];
-  for (const p of proposals) {
-    const members = p.ideas.filter((id) => known.has(id) && !parentOf.has(id));
-    if (members.length < 2) continue;
-    const group = { ...p, ideas: members };
+/** Maps each grouped item to its group; groups with fewer than two known items are dropped. */
+function groupItems<T extends { id: string }, G>(items: T[], groups: G[], members: (g: G) => string[], withMembers: (g: G, ids: string[]) => G): { groups: G[]; parentOf: Map<string, G>; standalone: T[] } {
+  const known = new Set(items.map((i) => i.id));
+  const parentOf = new Map<string, G>();
+  const kept: G[] = [];
+  for (const g of groups) {
+    const ids = members(g).filter((id) => known.has(id) && !parentOf.has(id));
+    if (ids.length < 2) continue;
+    const group = withMembers(g, ids);
     kept.push(group);
-    for (const id of members) parentOf.set(id, group);
+    for (const id of ids) parentOf.set(id, group);
   }
-  return { proposals: kept, parentOf, standalone: ideas.filter((i) => !parentOf.has(i.id)) };
+  return { groups: kept, parentOf, standalone: items.filter((i) => !parentOf.has(i.id)) };
+}
+
+export function groupIdeas(ideas: Idea[], proposals: Proposal[]): { proposals: Proposal[]; parentOf: Map<string, Proposal>; standalone: Idea[] } {
+  const g = groupItems(ideas, proposals, (p) => p.ideas, (p, ids) => ({ ...p, ideas: ids }));
+  return { proposals: g.groups, parentOf: g.parentOf, standalone: g.standalone };
+}
+
+export function groupBugs(bugs: Bug[], groups: BugGroup[]): { groups: BugGroup[]; parentOf: Map<string, BugGroup>; standalone: Bug[] } {
+  return groupItems(bugs, groups, (g) => g.bugs, (g, ids) => ({ ...g, bugs: ids }));
 }
 
 export const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];

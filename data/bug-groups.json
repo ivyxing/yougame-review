@@ -1,0 +1,22 @@
+[
+ {
+  "id": "BG-01",
+  "title": "Upload rules have a broken sentence and contradict themselves",
+  "area": "Content",
+  "summary": "Both are copy mistakes in the Rules section of the same page, \"What you can upload\" (/specs), and one edit of that page fixes both.",
+  "bugs": [
+   "BUG-05",
+   "BUG-06"
+  ]
+ },
+ {
+  "id": "BG-02",
+  "title": "Game listings misstate how a game plays or where it runs",
+  "area": "Game listing",
+  "summary": "Both are listing details that contradict the game itself: Perfect Circle is called single player with no online mode, and Brawl Online says \"For Mac and PC!\" though only Apple silicon Macs work. Checking each listing's mode and platform fields against the game fixes both, and may turn up more.",
+  "bugs": [
+   "BUG-10",
+   "BUG-11"
+  ]
+ }
+]

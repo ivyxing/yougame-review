@@ -5,13 +5,18 @@ import {
   REASON_LABEL,
   SEVERITIES,
   STATUS_LABEL,
+  bugGroupStatus,
   bugStatus,
   bugThumbnail,
+  groupBugs,
   groupIdeas,
+  groupSeverity,
+  isBugKind,
   ideaStatus,
   screenshotLabel,
   stepsList,
   type Bug,
+  type BugGroup,
   type Decision,
   type DecisionInput,
   type Decisions,
@@ -27,25 +32,26 @@ import { Bug as BugIcon, Close, Copy, Examine, External, Info, Layout, Learn, Sp
 interface Review {
   viewer: { login: string; canWrite: boolean };
   bugs: Bug[];
+  bugGroups?: BugGroup[];
   ideas: Idea[];
   proposals?: Proposal[];
   improvements?: Improvement[];
   decisions: Decisions;
 }
 type Page = "bugs" | "ideas" | "improvements" | "feedback";
-type Item = { kind: "bug"; item: Bug } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal } | { kind: "improvement"; item: Improvement };
+type Item = { kind: "bug"; item: Bug } | { kind: "bug_group"; item: BugGroup } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal } | { kind: "improvement"; item: Improvement };
 type Grouped = ReturnType<typeof groupIdeas>;
+type BugGrouped = ReturnType<typeof groupBugs>;
 
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
 const PAGES: Page[] = ["bugs", "ideas", "improvements", "feedback"];
-const pageOf = (id: string): Page => (/^BUG-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
+const pageOf = (id: string): Page => (/^(BUG|BG)-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
 
 function pageFromHash(): { page: Page; open?: string } {
   const h = decodeURIComponent(location.hash.slice(1));
   if (PAGES.includes(h as Page)) return { page: h as Page };
-  if (/^BUG-/i.test(h)) return { page: "bugs", open: h };
-  if (/^(UX|RD|IM)-/i.test(h)) return { page: pageOf(h), open: h };
+  if (/^(BUG|BG|UX|RD|IM)-/i.test(h)) return { page: pageOf(h), open: h };
   return { page: "bugs" };
 }
 
@@ -90,10 +96,13 @@ export function App() {
   const decisions = review.decisions;
   const grouped = groupIdeas(review.ideas, review.proposals ?? []);
   const improvements = review.improvements ?? [];
+  const bugGrouped = groupBugs(review.bugs, review.bugGroups ?? []);
   const openItem: Item | undefined = openId
     ? (() => {
         const b = review.bugs.find((x) => x.id === openId);
         if (b) return { kind: "bug", item: b } as Item;
+        const g = bugGrouped.groups.find((x) => x.id === openId);
+        if (g) return { kind: "bug_group", item: g } as Item;
         const i = review.ideas.find((x) => x.id === openId);
         if (i) return { kind: "idea", item: i } as Item;
         const p = grouped.proposals.find((x) => x.id === openId);
@@ -104,7 +113,7 @@ export function App() {
     : undefined;
 
   const counts = {
-    bugs: review.bugs.filter((b) => ["open", "fixing"].includes(bugStatus(b, decisions[b.id]))).length,
+    bugs: [...bugGrouped.groups.map((g) => bugGroupStatus(g, decisions, review.bugs)), ...bugGrouped.standalone.map((b) => bugStatus(b, decisions[b.id]))].filter((st) => st === "open" || st === "fixing").length,
     ideas: grouped.proposals.filter((p) => !decisions[p.id] || decisions[p.id].status === "open").length + grouped.standalone.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
     improvements: improvements.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
     feedback: Object.values(decisions).filter((d) => d.status === "dismissed" || d.note).length,
@@ -144,14 +153,14 @@ export function App() {
       </aside>
 
       <main className="main">
-        {page === "bugs" && <BugsPage bugs={review.bugs} decisions={decisions} onOpen={setOpenId} say={say} />}
+        {page === "bugs" && <BugsPage bugs={review.bugs} grouped={bugGrouped} decisions={decisions} onOpen={setOpenId} say={say} />}
         {page === "ideas" && <IdeasPage ideas={review.ideas} grouped={grouped} decisions={decisions} onOpen={setOpenId} say={say} />}
         {page === "improvements" && <ImprovementsPage improvements={improvements} decisions={decisions} onOpen={setOpenId} say={say} />}
-        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} onOpen={(id) => { setPage(pageOf(id)); setOpenId(id); }} />}
+        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} bugGroups={bugGrouped.groups} onOpen={(id) => { setPage(pageOf(id)); setOpenId(id); }} />}
       </main>
 
       {openItem && (
-        <Drawer key={openItem.item.id} entry={openItem} decisions={decisions} review={review} grouped={grouped} canWrite={review.viewer.canWrite} onOpen={setOpenId} onClose={() => setOpenId(undefined)} onSave={save} say={say} />
+        <Drawer key={openItem.item.id} entry={openItem} decisions={decisions} review={review} grouped={grouped} bugGrouped={bugGrouped} canWrite={review.viewer.canWrite} onOpen={setOpenId} onClose={() => setOpenId(undefined)} onSave={save} say={say} />
       )}
       <div className="toast" role="status" aria-live="polite">{toast && <span>{toast}</span>}</div>
     </div>
@@ -261,17 +270,26 @@ function Chips<T extends string>({ label, options, value, onChange }: { label: s
 
 type BugFilter = "active" | "fixed" | "dismissed" | "all";
 
-function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
+/** One card on the bugs board: a bug on its own, or a group of similar bugs. */
+type BugEntry = { id: string; kind: "bug" | "bug_group"; title: string; area?: string; severity: Bug["severity"]; status: Status; thumbs: string[]; prompt?: string };
+
+function BugsPage({ bugs, grouped, decisions, onOpen, say }: { bugs: Bug[]; grouped: BugGrouped; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
   const [filter, setFilter] = useState<BugFilter>("active");
-  const st = (b: Bug) => bugStatus(b, decisions[b.id]);
-  const groups: Record<BugFilter, Bug[]> = {
-    active: bugs.filter((b) => ["open", "fixing"].includes(st(b))),
-    fixed: bugs.filter((b) => st(b) === "fixed"),
-    dismissed: bugs.filter((b) => st(b) === "dismissed"),
-    all: bugs,
+  const entries: BugEntry[] = [
+    ...grouped.groups.map((g) => {
+      const members = g.bugs.map((id) => bugs.find((b) => b.id === id)!);
+      return { id: g.id, kind: "bug_group" as const, title: g.title, area: `${members.length} bugs${g.area ? ` · ${g.area}` : ""}`, severity: groupSeverity(g, bugs), status: bugGroupStatus(g, decisions, bugs), thumbs: members.map(bugThumbnail).filter(Boolean).slice(0, 2) as string[], prompt: bugGroupPrompt(g, bugs) };
+    }),
+    ...grouped.standalone.map((b) => ({ id: b.id, kind: "bug" as const, title: b.title, area: b.area, severity: b.severity, status: bugStatus(b, decisions[b.id]) as Status, thumbs: [bugThumbnail(b)].filter(Boolean) as string[], prompt: b.agent_prompt })),
+  ];
+  const groups: Record<BugFilter, BugEntry[]> = {
+    active: entries.filter((e) => ["open", "fixing"].includes(e.status)),
+    fixed: entries.filter((e) => e.status === "fixed"),
+    dismissed: entries.filter((e) => e.status === "dismissed"),
+    all: entries,
   };
   const shown = groups[filter];
-  const prompts = groups.active.filter((b) => b.agent_prompt);
+  const prompts = groups.active.filter((e) => e.prompt).map((e) => ({ id: e.id, title: e.title, agent_prompt: e.prompt }));
   return (
     <>
       <header className="page-head">
@@ -288,13 +306,13 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
           { key: "active", label: "Open", count: groups.active.length },
           { key: "fixed", label: "Fixed", count: groups.fixed.length },
           { key: "dismissed", label: "Dismissed", count: groups.dismissed.length },
-          { key: "all", label: "All", count: bugs.length },
+          { key: "all", label: "All", count: entries.length },
         ]}
       />
-      <div className="board" style={boardCols(SEVERITIES.filter((sev) => shown.some((b) => b.severity === sev)).length)}>
+      <div className="board" style={boardCols(SEVERITIES.filter((sev) => shown.some((e) => e.severity === sev)).length)}>
         {shown.length === 0 && <p className="none">None</p>}
         {SEVERITIES.map((sev) => {
-          const items = shown.filter((b) => b.severity === sev);
+          const items = shown.filter((e) => e.severity === sev);
           if (items.length === 0) return null;
           return (
             <section key={sev} className="column" aria-label={`${cap(sev)} severity`}>
@@ -302,8 +320,8 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
                 <span className={`sev-mark sev-${sev}`} aria-hidden="true" />
                 {cap(sev)} <span className="count">· {items.length}</span>
               </h2>
-              {items.map((b) => (
-                <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} onOpen={onOpen} />
+              {items.map((e) => (
+                <Card key={e.id} id={e.id} title={e.title} meta={e.area} status={e.status === "open" ? undefined : statusText(e.kind, e.status, decisions[e.id])} thumbs={e.thumbs} onOpen={onOpen} />
               ))}
             </section>
           );
@@ -311,6 +329,14 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
       </div>
     </>
   );
+}
+
+/** The group's own prompt, or its bugs' prompts in order. */
+function bugGroupPrompt(g: BugGroup, bugs: Bug[]): string | undefined {
+  if (g.agent_prompt) return g.agent_prompt;
+  const parts = g.bugs.map((id) => bugs.find((b) => b.id === id)).filter((b): b is Bug => !!b?.agent_prompt);
+  if (!parts.length) return undefined;
+  return `Fix these related YouGame bugs together ("${g.title}"). Each section is self-contained.\n\n${parts.map((b) => `## ${b.id}: ${b.title}\n\n${b.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
 type IdeaFilter = "open" | "answered" | "dismissed" | "all";
@@ -476,14 +502,14 @@ function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; t
 
 // ---------- detail drawer ----------
 
-const PROMPT_NAME: Record<Kind, string> = { bug: "fix", idea: "design", proposal: "design", improvement: "build" };
+const PROMPT_NAME: Record<Kind, string> = { bug: "fix", bug_group: "fix", idea: "design", proposal: "design", improvement: "build" };
 
-function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, onSave, say }: { entry: Item; decisions: Decisions; review: Review; grouped: Grouped; canWrite: boolean; onOpen: (id: string) => void; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
+function Drawer({ entry, decisions, review, grouped, bugGrouped, canWrite, onOpen, onClose, onSave, say }: { entry: Item; decisions: Decisions; review: Review; grouped: Grouped; bugGrouped: BugGrouped; canWrite: boolean; onOpen: (id: string) => void; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
   const { kind, item } = entry;
   const decision = decisions[item.id];
-  const parent = kind === "idea" ? grouped.parentOf.get(item.id) : undefined;
-  const current: Status = kind === "bug" ? bugStatus(item, decision) : ideaStatus(item as Idea, decision, parent && decisions[parent.id]);
-  const prompt = kind === "proposal" ? proposalPrompt(item, review.ideas) : item.agent_prompt;
+  const parent = kind === "idea" ? grouped.parentOf.get(item.id) : kind === "bug" ? bugGrouped.parentOf.get(item.id) : undefined;
+  const current: Status = kind === "bug" ? bugStatus(item, decision, parent && decisions[parent.id]) : kind === "bug_group" ? bugGroupStatus(item, decisions, review.bugs) : ideaStatus(item as Idea, decision, parent && decisions[parent.id]);
+  const prompt = kind === "proposal" ? proposalPrompt(item, review.ideas) : kind === "bug_group" ? bugGroupPrompt(item, review.bugs) : item.agent_prompt;
   const [status, setStatus] = useState<Status>(current);
   const [reason, setReason] = useState<DismissReason | undefined>(decision?.reason);
   const [note, setNote] = useState(decision?.note ?? "");
@@ -525,7 +551,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
     return ok;
   }
 
-  const options = (kind === "bug" ? ["open", "fixing", "fixed", "dismissed"] : ["open", "planned", "later", "done", "dismissed"]) as Status[];
+  const options = (isBugKind(kind) ? ["open", "fixing", "fixed", "dismissed"] : ["open", "planned", "later", "done", "dismissed"]) as Status[];
   const inherited = parent && !decision && decisions[parent.id];
 
   return (
@@ -534,7 +560,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         <div className="drawer-head">
           <span className="drawer-meta">
             <span className="mono">{item.id}</span>
-            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "proposal" ? <span>Redesign</span> : <span>{cap((item as Idea).priority)} priority</span>}
+            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "bug_group" ? <span>{cap(groupSeverity(item as BugGroup, review.bugs))} severity · {(item as BugGroup).bugs.length} bugs</span> : kind === "proposal" ? <span>Redesign</span> : <span>{cap((item as Idea).priority)} priority</span>}
             {kind === "improvement" && (item as Improvement).effort && <span>{cap((item as Improvement).effort)} build</span>}
             {item.area && <span>{item.area}</span>}
           </span>
@@ -542,8 +568,15 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         </div>
         <h2 id="drawer-title" className="drawer-title">{item.title}</h2>
 
+        {kind === "bug" && parent && (
+          <button type="button" className="parent-link" onClick={() => go(parent.id)}>
+            <span>Part of <strong>{parent.title}</strong></span>
+            <Examine />
+          </button>
+        )}
         {kind === "bug" && <BugBody bug={item as Bug} onZoom={setZoom} />}
-        {kind === "idea" && <IdeaBody idea={item as Idea} parent={parent} onOpen={go} onZoom={setZoom} />}
+        {kind === "bug_group" && <BugGroupBody group={item as BugGroup} bugs={review.bugs} decisions={decisions} onOpen={go} />}
+        {kind === "idea" && <IdeaBody idea={item as Idea} parent={grouped.parentOf.get(item.id)} onOpen={go} onZoom={setZoom} />}
         {kind === "proposal" && <ProposalBody proposal={item as Proposal} ideas={review.ideas} decisions={decisions} onOpen={go} onZoom={setZoom} />}
         {kind === "improvement" && <IdeaBody idea={item as Improvement} onOpen={go} onZoom={setZoom} />}
         {kind === "improvement" && <Related ids={(item as Improvement).related ?? []} review={review} decisions={decisions} onOpen={go} />}
@@ -564,7 +597,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         <section className="decide" aria-labelledby="decide-title">
           <h3 id="decide-title">
             Your decision
-            <InfoTip label="decisions">Saved to the review repository for everyone with access. Dismissals and notes are read by future YouGame scans, so they stop reporting things like this.{kind === "proposal" ? " Ideas in this redesign follow this decision unless you decide on one of them separately." : parent && !decision ? ` Until you decide here, this idea follows the ${parent.title} decision.` : ""}</InfoTip>
+            <InfoTip label="decisions">Saved to the review repository for everyone with access. Dismissals and notes are read by future YouGame scans, so they stop reporting things like this.{kind === "proposal" ? " Ideas in this redesign follow this decision unless you decide on one of them separately." : kind === "bug_group" ? " Bugs in this group follow this decision unless you decide on one of them separately." : parent && !decision ? ` Until you decide here, this ${kind === "bug" ? "bug" : "idea"} follows the ${parent.title} decision.` : ""}</InfoTip>
           </h3>
           {canWrite ? (
             <>
@@ -714,9 +747,35 @@ function ProposalBody({ proposal, ideas, decisions, onOpen, onZoom }: { proposal
   );
 }
 
+function BugGroupBody({ group, bugs, decisions, onOpen }: { group: BugGroup; bugs: Bug[]; decisions: Decisions; onOpen: (id: string) => void }) {
+  const members = group.bugs.map((id) => bugs.find((b) => b.id === id)).filter((b): b is Bug => !!b);
+  return (
+    <>
+      {group.summary && <Block title="What they have in common"><p>{group.summary}</p></Block>}
+      <Block title={`Bugs in this group · ${members.length}`}>
+        <ul className="member-list">
+          {members.map((b) => {
+            const d = decisions[b.id];
+            return (
+              <li key={b.id}>
+                <button type="button" className="member" onClick={() => onOpen(b.id)} aria-label={`${b.id}: ${b.title}. Open details`}>
+                  <span className="mono">{b.id}</span>
+                  <span className="member-title">{b.title}</span>
+                  {d && <span className="card-status">{statusText("bug", d.status, d)}</span>}
+                  <Examine />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Block>
+    </>
+  );
+}
+
 /** The findings an improvement builds on, each opening its own detail. */
 function Related({ ids, review, decisions, onOpen }: { ids: string[]; review: Review; decisions: Decisions; onOpen: (id: string) => void }) {
-  const all = [...review.bugs, ...review.ideas, ...(review.proposals ?? []), ...(review.improvements ?? [])];
+  const all = [...review.bugs, ...(review.bugGroups ?? []), ...review.ideas, ...(review.proposals ?? []), ...(review.improvements ?? [])];
   const items = ids.map((id) => all.find((x) => x.id === id)).filter((x): x is (typeof all)[number] => !!x);
   if (!items.length) return null;
   return (
@@ -772,8 +831,8 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 
 // ---------- what scans learn ----------
 
-function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals: Proposal[]; onOpen: (id: string) => void }) {
-  const titles = new Map<string, string>([...review.bugs, ...review.ideas, ...proposals, ...(review.improvements ?? [])].map((x) => [x.id, x.title]));
+function FeedbackPage({ review, proposals, bugGroups, onOpen }: { review: Review; proposals: Proposal[]; bugGroups: BugGroup[]; onOpen: (id: string) => void }) {
+  const titles = new Map<string, string>([...review.bugs, ...bugGroups, ...review.ideas, ...proposals, ...(review.improvements ?? [])].map((x) => [x.id, x.title]));
   const all = Object.values(review.decisions).filter((d) => titles.has(d.id));
   const dismissed = all.filter((d) => d.status === "dismissed");
   const notes = all.filter((d) => d.status !== "dismissed" && d.note);
@@ -808,7 +867,7 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
   );
 }
 
-const KIND_NAME: Record<Kind, string> = { bug: "Bug", idea: "Design idea", proposal: "Redesign", improvement: "Improvement" };
+const KIND_NAME: Record<Kind, string> = { bug: "Bug", bug_group: "Bug group", idea: "Design idea", proposal: "Redesign", improvement: "Improvement" };
 
 function FeedbackCard({ d, title, onOpen }: { d: Decision; title: string; onOpen: (id: string) => void }) {
   return (

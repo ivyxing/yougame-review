@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bugStatus, bugThumbnail, groupIdeas, ideaStatus, validateDecision, type Decision, type Idea, type Kind } from "../src/model.ts";
+import { bugGroupStatus, bugStatus, bugThumbnail, groupBugs, groupIdeas, groupSeverity, ideaStatus, validateDecision, type Bug, type Decision, type Decisions, type Idea, type Kind } from "../src/model.ts";
 import { serializeDecisions, writeDecision } from "../server/github.ts";
 
 const known = new Map<string, Kind>([["BUG-01", "bug"], ["UX-01", "idea"]]);
@@ -63,4 +63,25 @@ test("redesigns group their ideas and ideas follow the redesign decision", () =>
   const withImprovement = new Map<string, Kind>([["IM-01", "improvement"]]);
   assert.equal(validateDecision({ id: "IM-01", kind: "improvement", status: "planned" }, withImprovement).status, "planned");
   assert.throws(() => validateDecision({ id: "IM-01", kind: "idea", status: "planned" }, withImprovement));
+});
+
+test("similar bugs group into one card that their decision flows to", () => {
+  const bugs = [
+    { id: "BUG-01", title: "a", severity: "low" },
+    { id: "BUG-02", title: "b", severity: "medium" },
+    { id: "BUG-03", title: "c", severity: "high" },
+  ] as Bug[];
+  const g = groupBugs(bugs, [
+    { id: "BG-01", title: "ab", bugs: ["BUG-01", "BUG-02"] },
+    { id: "BG-02", title: "lonely", bugs: ["BUG-03", "BUG-99"] },
+  ]);
+  assert.deepEqual(g.groups.map((x) => x.id), ["BG-01"]);
+  assert.deepEqual(g.standalone.map((b) => b.id), ["BUG-03"]);
+  assert.equal(groupSeverity(g.groups[0], bugs), "medium");
+  assert.equal(bugGroupStatus(g.groups[0], {}, bugs), "open");
+  const fixedBoth = { "BUG-01": { status: "fixed" }, "BUG-02": { status: "fixed" } } as unknown as Decisions;
+  assert.equal(bugGroupStatus(g.groups[0], fixedBoth, bugs), "fixed");
+  const parent = { id: "BG-01", kind: "bug_group", status: "fixing", by: "x", at: "t" } as Decision;
+  assert.equal(bugStatus(bugs[0], undefined, parent), "fixing");
+  assert.equal(validateDecision({ id: "BG-01", kind: "bug_group", status: "fixed" }, new Map<string, Kind>([["BG-01", "bug_group"]])).status, "fixed");
 });
