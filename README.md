@@ -10,6 +10,7 @@ A review site for [yougame.co](https://yougame.co): bugs found in beta testing a
 | `api/` | Vercel functions: GitHub sign-in, the review data, screenshots, and saving decisions. |
 | `server/` | Shared server code: session, GitHub reads and writes, findings on disk. |
 | `data/bugs.json`, `data/ux.json` | The findings. Edit them to add, reword or remove items. |
+| `data/proposals.json` | Redesigns: one mock that answers several design ideas, listed by id in `ideas`. Ideas in a redesign show inside it instead of on the board. |
 | `screenshots/` | Evidence screenshots and redesign mocks, referenced from the JSON. |
 | `feedback/decisions.json` | Saved decisions. Written by the site, one commit per save. |
 | `sync.py` | Copies fresh findings from the Claude project into `data/` and `screenshots/`. |

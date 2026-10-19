@@ -1,0 +1,35 @@
+[
+ {
+  "id": "RD-01",
+  "title": "Home page redesign",
+  "area": "Home",
+  "page_url": "https://yougame.co/?sort=top",
+  "summary": "One mock that answers seven home page critiques at once: a player-first headline with one featured game, a single filter bar, game cards coloured by where they run, a calmer card layout, labelled header actions, an update notice only where it applies, and the accessibility basics.",
+  "before_screenshot": "screenshots/ux/UX-01.png",
+  "after_image": "screenshots/ux/mocks/home-option-a.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "ideas": [
+   "UX-01",
+   "UX-02",
+   "UX-03",
+   "UX-04",
+   "UX-14",
+   "UX-05",
+   "UX-09"
+  ]
+ },
+ {
+  "id": "RD-02",
+  "title": "Game page for emulator games",
+  "area": "Game page",
+  "page_url": "https://yougame.co/g/project-rollback",
+  "summary": "A game page that puts the three setup steps in the hero, with the main button always showing the next step, and a \"Known issues & help\" panel above comments so support questions stop crowding the discussion.",
+  "before_screenshot": "screenshots/ux/UX-06.png",
+  "after_image": "screenshots/ux/mocks/game-page-emulator.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-2",
+  "ideas": [
+   "UX-06",
+   "UX-12"
+  ]
+ }
+]

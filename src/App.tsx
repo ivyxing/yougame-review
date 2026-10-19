@@ -7,6 +7,7 @@ import {
   STATUS_LABEL,
   bugStatus,
   bugThumbnail,
+  groupIdeas,
   ideaStatus,
   screenshotLabel,
   stepsList,
@@ -17,6 +18,7 @@ import {
   type DismissReason,
   type Idea,
   type Kind,
+  type Proposal,
   type Status,
 } from "./model.ts";
 import { Bug as BugIcon, Close, Copy, Examine, External, Info, Layout, Learn } from "./icons.tsx";
@@ -25,10 +27,12 @@ interface Review {
   viewer: { login: string; canWrite: boolean };
   bugs: Bug[];
   ideas: Idea[];
+  proposals?: Proposal[];
   decisions: Decisions;
 }
 type Page = "bugs" | "ideas" | "feedback";
-type Item = { kind: "bug"; item: Bug } | { kind: "idea"; item: Idea };
+type Item = { kind: "bug"; item: Bug } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal };
+type Grouped = ReturnType<typeof groupIdeas>;
 
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
@@ -38,7 +42,7 @@ function pageFromHash(): { page: Page; open?: string } {
   const h = decodeURIComponent(location.hash.slice(1));
   if (PAGES.includes(h as Page)) return { page: h as Page };
   if (/^BUG-/i.test(h)) return { page: "bugs", open: h };
-  if (/^UX-/i.test(h)) return { page: "ideas", open: h };
+  if (/^(UX|RD)-/i.test(h)) return { page: "ideas", open: h };
   return { page: "bugs" };
 }
 
@@ -81,18 +85,21 @@ export function App() {
   if (!review) return error ? <SignedOut error={error} /> : <div className="loading" role="status">Loading the review…</div>;
 
   const decisions = review.decisions;
+  const grouped = groupIdeas(review.ideas, review.proposals ?? []);
   const openItem: Item | undefined = openId
     ? (() => {
         const b = review.bugs.find((x) => x.id === openId);
         if (b) return { kind: "bug", item: b } as Item;
         const i = review.ideas.find((x) => x.id === openId);
-        return i ? ({ kind: "idea", item: i } as Item) : undefined;
+        if (i) return { kind: "idea", item: i } as Item;
+        const p = grouped.proposals.find((x) => x.id === openId);
+        return p ? ({ kind: "proposal", item: p } as Item) : undefined;
       })()
     : undefined;
 
   const counts = {
     bugs: review.bugs.filter((b) => ["open", "fixing"].includes(bugStatus(b, decisions[b.id]))).length,
-    ideas: review.ideas.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
+    ideas: grouped.proposals.filter((p) => !decisions[p.id] || decisions[p.id].status === "open").length + grouped.standalone.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
     feedback: Object.values(decisions).filter((d) => d.status === "dismissed" || d.note).length,
   };
 
@@ -130,12 +137,12 @@ export function App() {
 
       <main className="main">
         {page === "bugs" && <BugsPage bugs={review.bugs} decisions={decisions} onOpen={setOpenId} say={say} />}
-        {page === "ideas" && <IdeasPage ideas={review.ideas} decisions={decisions} onOpen={setOpenId} say={say} />}
-        {page === "feedback" && <FeedbackPage review={review} onOpen={(id) => { setPage(id.startsWith("UX") ? "ideas" : "bugs"); setOpenId(id); }} />}
+        {page === "ideas" && <IdeasPage ideas={review.ideas} grouped={grouped} decisions={decisions} onOpen={setOpenId} say={say} />}
+        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} onOpen={(id) => { setPage(/^(UX|RD)/.test(id) ? "ideas" : "bugs"); setOpenId(id); }} />}
       </main>
 
       {openItem && (
-        <Drawer key={openItem.item.id} entry={openItem} decision={decisions[openItem.item.id]} canWrite={review.viewer.canWrite} onClose={() => setOpenId(undefined)} onSave={save} say={say} />
+        <Drawer key={openItem.item.id} entry={openItem} decisions={decisions} review={review} grouped={grouped} canWrite={review.viewer.canWrite} onOpen={setOpenId} onClose={() => setOpenId(undefined)} onSave={save} say={say} />
       )}
       <div className="toast" role="status" aria-live="polite">{toast && <span>{toast}</span>}</div>
     </div>
@@ -285,7 +292,7 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
                 {cap(sev)} <span className="count">· {items.length}</span>
               </h2>
               {items.length === 0 ? <p className="none">None</p> : items.map((b) => (
-                <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} onOpen={onOpen} />
+                <Card key={b.id} id={b.id} title={b.title} meta={b.area} status={st(b) === "open" ? undefined : statusText("bug", st(b), decisions[b.id])} thumbs={[bugThumbnail(b)].filter(Boolean) as string[]} prompt={b.agent_prompt} onOpen={onOpen} say={say} />
               ))}
             </section>
           );
@@ -297,22 +304,23 @@ function BugsPage({ bugs, decisions, onOpen, say }: { bugs: Bug[]; decisions: De
 
 type IdeaFilter = "open" | "answered" | "dismissed" | "all";
 
-function IdeasPage({ ideas, decisions, onOpen, say }: { ideas: Idea[]; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
+function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; grouped: Grouped; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
   const [filter, setFilter] = useState<IdeaFilter>("open");
   const st = (i: Idea) => ideaStatus(i, decisions[i.id]);
-  const groups: Record<IdeaFilter, Idea[]> = {
-    open: ideas.filter((i) => st(i) === "open"),
-    answered: ideas.filter((i) => !["open", "dismissed"].includes(st(i))),
-    dismissed: ideas.filter((i) => st(i) === "dismissed"),
-    all: ideas,
-  };
-  const shown = groups[filter];
-  const prompts = ideas.filter((i) => i.agent_prompt && st(i) === "planned");
+  const pst = (p: Proposal) => ideaStatus(p as unknown as Idea, decisions[p.id]);
+  const match = (status: string): Record<IdeaFilter, boolean> => ({ open: status === "open", answered: !["open", "dismissed"].includes(status), dismissed: status === "dismissed", all: true });
+  const shownProposals = grouped.proposals.filter((p) => match(pst(p))[filter]);
+  const shown = grouped.standalone.filter((i) => match(st(i))[filter]);
+  const count = (f: IdeaFilter) => grouped.proposals.filter((p) => match(pst(p))[f]).length + grouped.standalone.filter((i) => match(st(i))[f]).length;
+  const planned = [
+    ...grouped.proposals.filter((p) => pst(p) === "planned").map((p) => ({ id: p.id, title: p.title, agent_prompt: proposalPrompt(p, ideas) })),
+    ...ideas.filter((i) => i.agent_prompt && ideaStatus(i, decisions[i.id], decisions[grouped.parentOf.get(i.id)?.id ?? ""]) === "planned" && !(grouped.parentOf.has(i.id) && pst(grouped.parentOf.get(i.id)!) === "planned")),
+  ].filter((x) => x.agent_prompt);
   return (
     <>
       <header className="page-head">
         <h1>Design ideas</h1>
-        {prompts.length > 0 && <button type="button" className="btn agent" onClick={() => copyText(promptBundle("Implement these YouGame design changes one at a time. Each section is self-contained.", prompts), say, `Copied ${prompts.length} prompts for your coding agent`)}>
+        {planned.length > 0 && <button type="button" className="btn agent" onClick={() => copyText(promptBundle("Implement these YouGame design changes one at a time. Each section is self-contained.", planned), say, `Copied ${planned.length} prompts for your coding agent`)}>
           <Copy /> Copy prompts for “Will do”
         </button>}
       </header>
@@ -321,38 +329,66 @@ function IdeasPage({ ideas, decisions, onOpen, say }: { ideas: Idea[]; decisions
         value={filter}
         onChange={setFilter}
         options={[
-          { key: "open", label: "Needs your take", count: groups.open.length },
-          { key: "answered", label: "Answered", count: groups.answered.length },
-          { key: "dismissed", label: "Dismissed", count: groups.dismissed.length },
-          { key: "all", label: "All", count: ideas.length },
+          { key: "open", label: "Needs your take", count: count("open") },
+          { key: "answered", label: "Answered", count: count("answered") },
+          { key: "dismissed", label: "Dismissed", count: count("dismissed") },
+          { key: "all", label: "All", count: count("all") },
         ]}
       />
-      <div className="board" style={{ ["--cols" as string]: PRIORITIES.length }}>
-        {PRIORITIES.map((p) => {
-          const items = shown.filter((i) => (i.priority ?? "low") === p);
-          return (
-            <section key={p} className="column" aria-label={`${cap(p)} priority`}>
-              <h2 className="column-title">
-                <span className={`sev-mark pri-${p}`} aria-hidden="true" />
-                {cap(p)} priority <span className="count">· {items.length}</span>
-              </h2>
-              {items.length === 0 ? <p className="none">None</p> : items.map((i) => (
-                <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} onOpen={onOpen} />
-              ))}
-            </section>
-          );
-        })}
-      </div>
+      {shownProposals.length > 0 && (
+        <section className="group" aria-labelledby="redesigns-title">
+          <h2 id="redesigns-title" className="group-title">
+            Redesigns <span className="count">· {shownProposals.length}</span>
+            <InfoTip label="redesigns">One mock that answers several ideas at once. Decide on the whole redesign here; open an idea inside it to decide on that part alone.</InfoTip>
+          </h2>
+          <div className="proposals">
+            {shownProposals.map((p) => {
+              const answered = p.ideas.filter((id) => decisions[id]).length;
+              return (
+                <Card key={p.id} id={p.id} wide title={p.title} meta={`${p.ideas.length} ideas${answered ? ` · ${answered} answered on their own` : ""}`} status={pst(p) === "open" ? undefined : statusText("proposal", pst(p), decisions[p.id])} thumbs={[p.before_screenshot, p.after_image].filter(Boolean) as string[]} prompt={proposalPrompt(p, ideas)} onOpen={onOpen} say={say} />
+              );
+            })}
+          </div>
+        </section>
+      )}
+      <section className="group" aria-labelledby="other-ideas-title">
+        {grouped.proposals.length > 0 && <h2 id="other-ideas-title" className="group-title">Other ideas <span className="count">· {shown.length}</span></h2>}
+        <div className="board" style={{ ["--cols" as string]: PRIORITIES.length }}>
+          {PRIORITIES.map((p) => {
+            const items = shown.filter((i) => (i.priority ?? "low") === p);
+            return (
+              <section key={p} className="column" aria-label={`${cap(p)} priority`}>
+                <h3 className="column-title">
+                  <span className={`sev-mark pri-${p}`} aria-hidden="true" />
+                  {cap(p)} priority <span className="count">· {items.length}</span>
+                </h3>
+                {items.length === 0 ? <p className="none">None</p> : items.map((i) => (
+                  <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} prompt={i.agent_prompt} onOpen={onOpen} say={say} />
+                ))}
+              </section>
+            );
+          })}
+        </div>
+      </section>
     </>
   );
+}
+
+/** The redesign's own prompt, or its ideas' prompts in order. */
+function proposalPrompt(p: Proposal, ideas: Idea[]): string | undefined {
+  if (p.agent_prompt) return p.agent_prompt;
+  const parts = p.ideas.map((id) => ideas.find((i) => i.id === id)).filter((i): i is Idea => !!i?.agent_prompt);
+  if (!parts.length) return undefined;
+  return `Implement the "${p.title}" redesign${p.figma_url ? ` (mock: ${p.figma_url})` : ""}. It is made of these changes; do them together so the page stays consistent.\n\n${parts.map((i) => `## ${i.id}: ${i.title}\n\n${i.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
 function promptBundle(head: string, items: { id: string; title: string; agent_prompt?: string }[]): string {
   return `${head}\n\n${items.map((i) => `## ${i.id}: ${i.title}\n\n${i.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
-function Card({ id, title, meta, status, thumbs, onOpen }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; onOpen: (id: string) => void }) {
+function Card({ id, title, meta, status, thumbs, prompt, wide, onOpen, say }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; prompt?: string; wide?: boolean; onOpen: (id: string) => void; say: (m: string) => void }) {
   return (
+    <div className={`card-shell${wide ? " wide" : ""}`}>
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
       <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
         {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
@@ -367,14 +403,23 @@ function Card({ id, title, meta, status, thumbs, onOpen }: { id: string; title: 
       </span>
       <span className="examine" aria-hidden="true"><Examine /></span>
     </button>
+    {prompt && (
+      <button type="button" className="card-copy" aria-label={`Copy the fix prompt for ${id}`} onClick={() => copyText(prompt, say, `Fix prompt for ${id} copied`)}>
+        <Copy /> Copy fix prompt
+      </button>
+    )}
+    </div>
   );
 }
 
 // ---------- detail drawer ----------
 
-function Drawer({ entry, decision, canWrite, onClose, onSave, say }: { entry: Item; decision?: Decision; canWrite: boolean; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
+function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, onSave, say }: { entry: Item; decisions: Decisions; review: Review; grouped: Grouped; canWrite: boolean; onOpen: (id: string) => void; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
   const { kind, item } = entry;
-  const current: Status = kind === "bug" ? bugStatus(item, decision) : ideaStatus(item, decision);
+  const decision = decisions[item.id];
+  const parent = kind === "idea" ? grouped.parentOf.get(item.id) : undefined;
+  const current: Status = kind === "bug" ? bugStatus(item, decision) : ideaStatus(item as Idea, decision, parent && decisions[parent.id]);
+  const prompt = kind === "proposal" ? proposalPrompt(item, review.ideas) : item.agent_prompt;
   const [status, setStatus] = useState<Status>(current);
   const [reason, setReason] = useState<DismissReason | undefined>(decision?.reason);
   const [note, setNote] = useState(decision?.note ?? "");
@@ -388,6 +433,10 @@ function Drawer({ entry, decision, canWrite, onClose, onSave, say }: { entry: It
     if (dirty) setConfirmClose(true);
     else onClose();
   }, [dirty, onClose]);
+  const go = (id: string) => {
+    if (dirty) setConfirmClose(true);
+    else onOpen(id);
+  };
 
   useEffect(() => {
     panel.current?.focus();
@@ -413,6 +462,7 @@ function Drawer({ entry, decision, canWrite, onClose, onSave, say }: { entry: It
   }
 
   const options = (kind === "bug" ? ["open", "fixing", "fixed", "dismissed"] : ["open", "planned", "later", "done", "dismissed"]) as Status[];
+  const inherited = parent && !decision && decisions[parent.id];
 
   return (
     <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
@@ -420,32 +470,34 @@ function Drawer({ entry, decision, canWrite, onClose, onSave, say }: { entry: It
         <div className="drawer-head">
           <span className="drawer-meta">
             <span className="mono">{item.id}</span>
-            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : <span>{cap((item as Idea).priority)} priority</span>}
+            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "idea" ? <span>{cap((item as Idea).priority)} priority</span> : <span>Redesign</span>}
             {item.area && <span>{item.area}</span>}
           </span>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}><Close /></button>
         </div>
         <h2 id="drawer-title" className="drawer-title">{item.title}</h2>
 
-        {kind === "bug" ? <BugBody bug={item as Bug} onZoom={setZoom} /> : <IdeaBody idea={item as Idea} onZoom={setZoom} />}
+        {kind === "bug" && <BugBody bug={item as Bug} onZoom={setZoom} />}
+        {kind === "idea" && <IdeaBody idea={item as Idea} parent={parent} onOpen={go} onZoom={setZoom} />}
+        {kind === "proposal" && <ProposalBody proposal={item as Proposal} ideas={review.ideas} decisions={decisions} onOpen={go} onZoom={setZoom} />}
 
-        {item.agent_prompt && (
+        {prompt && (
           <section className="agent-panel" aria-label="Prompt for your coding agent">
             <div className="agent-head">
               <span className="agent-label">
                 For your coding agent
                 <InfoTip label="agent prompts">Written for an AI coding agent such as Claude Code, not for you to read. Copy it and paste it into the agent working in YouGame's code.</InfoTip>
               </span>
-              <button type="button" className="btn agent small" onClick={() => copyText(item.agent_prompt!, say, "Prompt copied")}><Copy /> Copy prompt</button>
+              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, "Fix prompt copied")}><Copy /> Copy fix prompt</button>
             </div>
-            <pre>{item.agent_prompt}</pre>
+            <pre>{prompt}</pre>
           </section>
         )}
 
         <section className="decide" aria-labelledby="decide-title">
           <h3 id="decide-title">
             Your decision
-            <InfoTip label="decisions">Saved to the review repository for everyone with access. Dismissals and notes are read by future YouGame scans, so they stop reporting things like this.</InfoTip>
+            <InfoTip label="decisions">Saved to the review repository for everyone with access. Dismissals and notes are read by future YouGame scans, so they stop reporting things like this.{kind === "proposal" ? " Ideas in this redesign follow this decision unless you decide on one of them separately." : parent && !decision ? ` Until you decide here, this idea follows the ${parent.title} decision.` : ""}</InfoTip>
           </h3>
           {canWrite ? (
             <>
@@ -461,6 +513,7 @@ function Drawer({ entry, decision, canWrite, onClose, onSave, say }: { entry: It
               <div className="decide-actions">
                 <button type="button" className="btn primary" disabled={!dirty || saving} onClick={() => void submit()}>{saving ? "Saving…" : "Save decision"}</button>
                 {decision && <span className="receipt">Saved by @{decision.by}, {new Date(decision.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>}
+                {inherited && <span className="receipt">From the {parent.title} decision</span>}
               </div>
             </>
           ) : (
@@ -532,9 +585,15 @@ function BugBody({ bug, onZoom }: { bug: Bug; onZoom: (s: string) => void }) {
   );
 }
 
-function IdeaBody({ idea, onZoom }: { idea: Idea; onZoom: (s: string) => void }) {
+function IdeaBody({ idea, parent, onOpen, onZoom }: { idea: Idea; parent?: Proposal; onOpen: (id: string) => void; onZoom: (s: string) => void }) {
   return (
     <>
+      {parent && (
+        <button type="button" className="parent-link" onClick={() => onOpen(parent.id)}>
+          <span>Part of <strong>{parent.title}</strong></span>
+          <Examine />
+        </button>
+      )}
       {(idea.before_screenshot || idea.after_image) && (
         <div className={`shots compare${idea.before_screenshot && idea.after_image ? " n2" : " n1"}`}>
           {idea.before_screenshot && <Shot src={idea.before_screenshot} label="Today" onZoom={onZoom} />}
@@ -548,6 +607,42 @@ function IdeaBody({ idea, onZoom }: { idea: Idea; onZoom: (s: string) => void })
       {idea.problem && <Block title="What we noticed"><p>{idea.problem}</p></Block>}
       {idea.why_it_matters && <Block title="Why it matters"><p>{idea.why_it_matters}</p></Block>}
       {idea.recommendation && <Block title="Suggestion"><p>{idea.recommendation}</p></Block>}
+    </>
+  );
+}
+
+function ProposalBody({ proposal, ideas, decisions, onOpen, onZoom }: { proposal: Proposal; ideas: Idea[]; decisions: Decisions; onOpen: (id: string) => void; onZoom: (s: string) => void }) {
+  const members = proposal.ideas.map((id) => ideas.find((i) => i.id === id)).filter((i): i is Idea => !!i);
+  return (
+    <>
+      {(proposal.before_screenshot || proposal.after_image) && (
+        <div className={`shots compare${proposal.before_screenshot && proposal.after_image ? " n2" : " n1"}`}>
+          {proposal.before_screenshot && <Shot src={proposal.before_screenshot} label="Today" onZoom={onZoom} />}
+          {proposal.after_image && <Shot src={proposal.after_image} label="Proposed" onZoom={onZoom} />}
+        </div>
+      )}
+      <div className="links">
+        {proposal.page_url && <OutLink href={proposal.page_url}>See it on YouGame</OutLink>}
+        {proposal.figma_url && <OutLink href={proposal.figma_url}>Open the mock in Figma</OutLink>}
+      </div>
+      {proposal.summary && <Block title="What it changes"><p>{proposal.summary}</p></Block>}
+      <Block title={`Ideas it answers · ${members.length}`}>
+        <ul className="member-list">
+          {members.map((i) => {
+            const d = decisions[i.id];
+            return (
+              <li key={i.id}>
+                <button type="button" className="member" onClick={() => onOpen(i.id)} aria-label={`${i.id}: ${i.title}. Open details`}>
+                  <span className="mono">{i.id}</span>
+                  <span className="member-title">{i.title}</span>
+                  {d && <span className="card-status">{statusText("idea", d.status, d)}</span>}
+                  <Examine />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Block>
     </>
   );
 }
@@ -584,8 +679,8 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 
 // ---------- what scans learn ----------
 
-function FeedbackPage({ review, onOpen }: { review: Review; onOpen: (id: string) => void }) {
-  const titles = new Map<string, string>([...review.bugs, ...review.ideas].map((x) => [x.id, x.title]));
+function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals: Proposal[]; onOpen: (id: string) => void }) {
+  const titles = new Map<string, string>([...review.bugs, ...review.ideas, ...proposals].map((x) => [x.id, x.title]));
   const all = Object.values(review.decisions).filter((d) => titles.has(d.id));
   const dismissed = all.filter((d) => d.status === "dismissed");
   const notes = all.filter((d) => d.status !== "dismissed" && d.note);
@@ -624,7 +719,7 @@ function FeedbackCard({ d, title, onOpen }: { d: Decision; title: string; onOpen
   return (
     <button type="button" className="card text-card" onClick={() => onOpen(d.id)} aria-label={`${d.id}: ${title}. Open details`}>
       <span className="card-body">
-        <span className="card-id">{d.id} · {d.kind === "bug" ? "Bug" : "Design idea"}</span>
+        <span className="card-id">{d.id} · {d.kind === "bug" ? "Bug" : d.kind === "proposal" ? "Redesign" : "Design idea"}</span>
         <span className="card-title">{title}</span>
         {d.note && <span className="card-note">“{d.note}”</span>}
         <span className="card-meta">@{d.by}</span>
