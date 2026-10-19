@@ -345,7 +345,7 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
             {shownProposals.map((p) => {
               const answered = p.ideas.filter((id) => decisions[id]).length;
               return (
-                <Card key={p.id} id={p.id} wide title={p.title} meta={`${p.ideas.length} ideas${answered ? ` · ${answered} answered on their own` : ""}`} status={pst(p) === "open" ? undefined : statusText("proposal", pst(p), decisions[p.id])} thumbs={[p.before_screenshot, p.after_image].filter(Boolean) as string[]} prompt={proposalPrompt(p, ideas)} onOpen={onOpen} say={say} />
+                <Card key={p.id} id={p.id} wide title={p.title} meta={`${p.ideas.length} ideas${answered ? ` · ${answered} answered on their own` : ""}`} status={pst(p) === "open" ? undefined : statusText("proposal", pst(p), decisions[p.id])} thumbs={[p.before_screenshot, p.after_image].filter(Boolean) as string[]} prompt={proposalPrompt(p, ideas)} promptKind="design" onOpen={onOpen} say={say} />
               );
             })}
           </div>
@@ -363,7 +363,7 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
                   {cap(p)} priority <span className="count">· {items.length}</span>
                 </h3>
                 {items.length === 0 ? <p className="none">None</p> : items.map((i) => (
-                  <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} prompt={i.agent_prompt} onOpen={onOpen} say={say} />
+                  <Card key={i.id} id={i.id} title={i.title} meta={i.area} status={st(i) === "open" ? undefined : statusText("idea", st(i), decisions[i.id])} thumbs={[i.before_screenshot, i.after_image].filter(Boolean) as string[]} prompt={i.agent_prompt} promptKind="design" onOpen={onOpen} say={say} />
                 ))}
               </section>
             );
@@ -386,7 +386,7 @@ function promptBundle(head: string, items: { id: string; title: string; agent_pr
   return `${head}\n\n${items.map((i) => `## ${i.id}: ${i.title}\n\n${i.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
-function Card({ id, title, meta, status, thumbs, prompt, wide, onOpen, say }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; prompt?: string; wide?: boolean; onOpen: (id: string) => void; say: (m: string) => void }) {
+function Card({ id, title, meta, status, thumbs, prompt, promptKind = "fix", wide, onOpen, say }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; prompt?: string; promptKind?: "fix" | "design"; wide?: boolean; onOpen: (id: string) => void; say: (m: string) => void }) {
   return (
     <div className={`card-shell${wide ? " wide" : ""}`}>
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
@@ -404,8 +404,8 @@ function Card({ id, title, meta, status, thumbs, prompt, wide, onOpen, say }: { 
       <span className="examine" aria-hidden="true"><Examine /></span>
     </button>
     {prompt && (
-      <button type="button" className="card-copy" aria-label={`Copy the fix prompt for ${id}`} onClick={() => copyText(prompt, say, `Fix prompt for ${id} copied`)}>
-        <Copy /> Copy fix prompt
+      <button type="button" className="card-copy" aria-label={`Copy the ${promptKind} prompt for ${id}`} onClick={() => copyText(prompt, say, `${cap(promptKind)} prompt for ${id} copied`)}>
+        <Copy /> Copy {promptKind} prompt
       </button>
     )}
     </div>
@@ -488,7 +488,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
                 For your coding agent
                 <InfoTip label="agent prompts">Written for an AI coding agent such as Claude Code, not for you to read. Copy it and paste it into the agent working in YouGame's code.</InfoTip>
               </span>
-              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, "Fix prompt copied")}><Copy /> Copy fix prompt</button>
+              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, kind === "bug" ? "Fix prompt copied" : "Design prompt copied")}><Copy /> Copy {kind === "bug" ? "fix" : "design"} prompt</button>
             </div>
             <pre>{prompt}</pre>
           </section>
