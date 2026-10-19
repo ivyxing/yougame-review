@@ -17,32 +17,35 @@ import {
   type Decisions,
   type DismissReason,
   type Idea,
+  type Improvement,
   type Kind,
   type Proposal,
   type Status,
 } from "./model.ts";
-import { Bug as BugIcon, Close, Copy, Examine, External, Info, Layout, Learn } from "./icons.tsx";
+import { Bug as BugIcon, Close, Copy, Examine, External, Info, Layout, Learn, Spark } from "./icons.tsx";
 
 interface Review {
   viewer: { login: string; canWrite: boolean };
   bugs: Bug[];
   ideas: Idea[];
   proposals?: Proposal[];
+  improvements?: Improvement[];
   decisions: Decisions;
 }
-type Page = "bugs" | "ideas" | "feedback";
-type Item = { kind: "bug"; item: Bug } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal };
+type Page = "bugs" | "ideas" | "improvements" | "feedback";
+type Item = { kind: "bug"; item: Bug } | { kind: "idea"; item: Idea } | { kind: "proposal"; item: Proposal } | { kind: "improvement"; item: Improvement };
 type Grouped = ReturnType<typeof groupIdeas>;
 
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
-const PAGES: Page[] = ["bugs", "ideas", "feedback"];
+const PAGES: Page[] = ["bugs", "ideas", "improvements", "feedback"];
+const pageOf = (id: string): Page => (/^BUG-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
 
 function pageFromHash(): { page: Page; open?: string } {
   const h = decodeURIComponent(location.hash.slice(1));
   if (PAGES.includes(h as Page)) return { page: h as Page };
   if (/^BUG-/i.test(h)) return { page: "bugs", open: h };
-  if (/^(UX|RD)-/i.test(h)) return { page: "ideas", open: h };
+  if (/^(UX|RD|IM)-/i.test(h)) return { page: pageOf(h), open: h };
   return { page: "bugs" };
 }
 
@@ -86,6 +89,7 @@ export function App() {
 
   const decisions = review.decisions;
   const grouped = groupIdeas(review.ideas, review.proposals ?? []);
+  const improvements = review.improvements ?? [];
   const openItem: Item | undefined = openId
     ? (() => {
         const b = review.bugs.find((x) => x.id === openId);
@@ -93,13 +97,16 @@ export function App() {
         const i = review.ideas.find((x) => x.id === openId);
         if (i) return { kind: "idea", item: i } as Item;
         const p = grouped.proposals.find((x) => x.id === openId);
-        return p ? ({ kind: "proposal", item: p } as Item) : undefined;
+        if (p) return { kind: "proposal", item: p } as Item;
+        const m = improvements.find((x) => x.id === openId);
+        return m ? ({ kind: "improvement", item: m } as Item) : undefined;
       })()
     : undefined;
 
   const counts = {
     bugs: review.bugs.filter((b) => ["open", "fixing"].includes(bugStatus(b, decisions[b.id]))).length,
     ideas: grouped.proposals.filter((p) => !decisions[p.id] || decisions[p.id].status === "open").length + grouped.standalone.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
+    improvements: improvements.filter((i) => ideaStatus(i, decisions[i.id]) === "open").length,
     feedback: Object.values(decisions).filter((d) => d.status === "dismissed" || d.note).length,
   };
 
@@ -127,6 +134,7 @@ export function App() {
         <nav aria-label="Pages">
           <NavItem icon={<BugIcon />} label="Bugs" count={counts.bugs} countLabel="open" active={page === "bugs"} onClick={() => { setPage("bugs"); setOpenId(undefined); }} />
           <NavItem icon={<Layout />} label="Design ideas" count={counts.ideas} countLabel="need your take" active={page === "ideas"} onClick={() => { setPage("ideas"); setOpenId(undefined); }} />
+          {improvements.length > 0 && <NavItem icon={<Spark />} label="Improvements" count={counts.improvements} countLabel="need your take" active={page === "improvements"} onClick={() => { setPage("improvements"); setOpenId(undefined); }} />}
           <NavItem icon={<Learn />} label="Scan feedback" count={counts.feedback} countLabel="items" active={page === "feedback"} onClick={() => { setPage("feedback"); setOpenId(undefined); }} />
         </nav>
         <div className="me">
@@ -138,7 +146,8 @@ export function App() {
       <main className="main">
         {page === "bugs" && <BugsPage bugs={review.bugs} decisions={decisions} onOpen={setOpenId} say={say} />}
         {page === "ideas" && <IdeasPage ideas={review.ideas} grouped={grouped} decisions={decisions} onOpen={setOpenId} say={say} />}
-        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} onOpen={(id) => { setPage(/^(UX|RD)/.test(id) ? "ideas" : "bugs"); setOpenId(id); }} />}
+        {page === "improvements" && <ImprovementsPage improvements={improvements} decisions={decisions} onOpen={setOpenId} say={say} />}
+        {page === "feedback" && <FeedbackPage review={review} proposals={grouped.proposals} onOpen={(id) => { setPage(pageOf(id)); setOpenId(id); }} />}
       </main>
 
       {openItem && (
@@ -378,6 +387,57 @@ function IdeasPage({ ideas, grouped, decisions, onOpen, say }: { ideas: Idea[]; 
   );
 }
 
+function ImprovementsPage({ improvements, decisions, onOpen, say }: { improvements: Improvement[]; decisions: Decisions; onOpen: (id: string) => void; say: (m: string) => void }) {
+  const [filter, setFilter] = useState<IdeaFilter>("open");
+  const st = (i: Improvement) => ideaStatus(i, decisions[i.id]);
+  const match = (status: string): Record<IdeaFilter, boolean> => ({ open: status === "open", answered: !["open", "dismissed"].includes(status), dismissed: status === "dismissed", all: true });
+  const shown = improvements.filter((i) => match(st(i))[filter]);
+  const count = (f: IdeaFilter) => improvements.filter((i) => match(st(i))[f]).length;
+  const planned = improvements.filter((i) => i.agent_prompt && st(i) === "planned");
+  return (
+    <>
+      <header className="page-head">
+        <h1>
+          Improvements
+          <InfoTip label="improvements">Ideas for YouGame beyond bugs and design fixes: features, reasons to come back, and help for creators. Each builds on what the beta test and design review found.</InfoTip>
+        </h1>
+        {planned.length > 0 && <button type="button" className="btn agent" onClick={() => copyText(promptBundle("Build these YouGame improvements one at a time. Each section is self-contained.", planned), say, `Copied ${planned.length} prompts for your coding agent`)}>
+          <Copy /> Copy prompts for “Will do”
+        </button>}
+      </header>
+      <Chips<IdeaFilter>
+        label="Show"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { key: "open", label: "Needs your take", count: count("open") },
+          { key: "answered", label: "Answered", count: count("answered") },
+          { key: "dismissed", label: "Dismissed", count: count("dismissed") },
+          { key: "all", label: "All", count: count("all") },
+        ]}
+      />
+      <div className="board" style={boardCols(PRIORITIES.filter((p) => shown.some((i) => (i.priority ?? "low") === p)).length)}>
+        {shown.length === 0 && <p className="none">None</p>}
+        {PRIORITIES.map((p) => {
+          const items = shown.filter((i) => (i.priority ?? "low") === p);
+          if (items.length === 0) return null;
+          return (
+            <section key={p} className="column" aria-label={`${cap(p)} priority`}>
+              <h2 className="column-title">
+                <span className={`sev-mark pri-${p}`} aria-hidden="true" />
+                {cap(p)} priority <span className="count">· {items.length}</span>
+              </h2>
+              {items.map((i) => (
+                <Card key={i.id} id={i.id} title={i.title} meta={[i.area, i.effort && `${cap(i.effort)} build`].filter(Boolean).join(" · ")} status={st(i) === "open" ? undefined : statusText("improvement", st(i), decisions[i.id])} thumbs={null} onOpen={onOpen} />
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 /** The redesign's own prompt, or its ideas' prompts in order. */
 function proposalPrompt(p: Proposal, ideas: Idea[]): string | undefined {
   if (p.agent_prompt) return p.agent_prompt;
@@ -390,13 +450,16 @@ function promptBundle(head: string, items: { id: string; title: string; agent_pr
   return `${head}\n\n${items.map((i) => `## ${i.id}: ${i.title}\n\n${i.agent_prompt}`).join("\n\n---\n\n")}`;
 }
 
-function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; title: string; meta?: string; status?: string; thumbs: string[]; wide?: boolean; onOpen: (id: string) => void }) {
+/** Pass thumbs={null} for an item whose screenshot only gives context, so the card stays compact. */
+function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; title: string; meta?: string; status?: string; thumbs: string[] | null; wide?: boolean; onOpen: (id: string) => void }) {
   return (
     <div className={`card-shell${wide ? " wide" : ""}`}>
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
-      <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
-        {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
-      </span>
+      {thumbs && (
+        <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
+          {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
+        </span>
+      )}
       <span className="card-body">
         <span className="card-id">{id}</span>
         <span className="card-title">{title}</span>
@@ -412,6 +475,8 @@ function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; t
 }
 
 // ---------- detail drawer ----------
+
+const PROMPT_NAME: Record<Kind, string> = { bug: "fix", idea: "design", proposal: "design", improvement: "build" };
 
 function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, onSave, say }: { entry: Item; decisions: Decisions; review: Review; grouped: Grouped; canWrite: boolean; onOpen: (id: string) => void; onClose: () => void; onSave: (d: DecisionInput) => Promise<boolean>; say: (m: string) => void }) {
   const { kind, item } = entry;
@@ -469,7 +534,8 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         <div className="drawer-head">
           <span className="drawer-meta">
             <span className="mono">{item.id}</span>
-            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "idea" ? <span>{cap((item as Idea).priority)} priority</span> : <span>Redesign</span>}
+            {kind === "bug" ? <span>{cap((item as Bug).severity)} severity</span> : kind === "proposal" ? <span>Redesign</span> : <span>{cap((item as Idea).priority)} priority</span>}
+            {kind === "improvement" && (item as Improvement).effort && <span>{cap((item as Improvement).effort)} build</span>}
             {item.area && <span>{item.area}</span>}
           </span>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}><Close /></button>
@@ -479,6 +545,8 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
         {kind === "bug" && <BugBody bug={item as Bug} onZoom={setZoom} />}
         {kind === "idea" && <IdeaBody idea={item as Idea} parent={parent} onOpen={go} onZoom={setZoom} />}
         {kind === "proposal" && <ProposalBody proposal={item as Proposal} ideas={review.ideas} decisions={decisions} onOpen={go} onZoom={setZoom} />}
+        {kind === "improvement" && <IdeaBody idea={item as Improvement} onOpen={go} onZoom={setZoom} />}
+        {kind === "improvement" && <Related ids={(item as Improvement).related ?? []} review={review} decisions={decisions} onOpen={go} />}
 
         {prompt && (
           <section className="agent-panel" aria-label="Prompt for your coding agent">
@@ -487,7 +555,7 @@ function Drawer({ entry, decisions, review, grouped, canWrite, onOpen, onClose, 
                 For your coding agent
                 <InfoTip label="agent prompts">Written for an AI coding agent such as Claude Code, not for you to read. Copy it and paste it into the agent working in YouGame's code.</InfoTip>
               </span>
-              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, kind === "bug" ? "Fix prompt copied" : "Design prompt copied")}><Copy /> Copy {kind === "bug" ? "fix" : "design"} prompt</button>
+              <button type="button" className="btn agent small" onClick={() => copyText(prompt, say, `${cap(PROMPT_NAME[kind])} prompt copied`)}><Copy /> Copy {PROMPT_NAME[kind]} prompt</button>
             </div>
             <pre>{prompt}</pre>
           </section>
@@ -646,6 +714,32 @@ function ProposalBody({ proposal, ideas, decisions, onOpen, onZoom }: { proposal
   );
 }
 
+/** The findings an improvement builds on, each opening its own detail. */
+function Related({ ids, review, decisions, onOpen }: { ids: string[]; review: Review; decisions: Decisions; onOpen: (id: string) => void }) {
+  const all = [...review.bugs, ...review.ideas, ...(review.proposals ?? []), ...(review.improvements ?? [])];
+  const items = ids.map((id) => all.find((x) => x.id === id)).filter((x): x is (typeof all)[number] => !!x);
+  if (!items.length) return null;
+  return (
+    <Block title={`Builds on · ${items.length}`}>
+      <ul className="member-list">
+        {items.map((i) => {
+          const d = decisions[i.id];
+          return (
+            <li key={i.id}>
+              <button type="button" className="member" onClick={() => onOpen(i.id)} aria-label={`${i.id}: ${i.title}. Open details`}>
+                <span className="mono">{i.id}</span>
+                <span className="member-title">{i.title}</span>
+                {d && <span className="card-status">{statusText(d.kind, d.status, d)}</span>}
+                <Examine />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Block>
+  );
+}
+
 function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="block">
@@ -679,7 +773,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 // ---------- what scans learn ----------
 
 function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals: Proposal[]; onOpen: (id: string) => void }) {
-  const titles = new Map<string, string>([...review.bugs, ...review.ideas, ...proposals].map((x) => [x.id, x.title]));
+  const titles = new Map<string, string>([...review.bugs, ...review.ideas, ...proposals, ...(review.improvements ?? [])].map((x) => [x.id, x.title]));
   const all = Object.values(review.decisions).filter((d) => titles.has(d.id));
   const dismissed = all.filter((d) => d.status === "dismissed");
   const notes = all.filter((d) => d.status !== "dismissed" && d.note);
@@ -692,7 +786,7 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
         </h1>
       </header>
       {all.length === 0 ? (
-        <p className="empty">Nothing yet. Dismiss a bug or design idea, or leave a note on one, and it shows up here for future scans.</p>
+        <p className="empty">Nothing yet. Dismiss a bug, design idea or improvement, or leave a note on one, and it shows up here for future scans.</p>
       ) : (
         <div className="board" style={boardCols(DISMISS_REASONS.length + 1)}>
           {DISMISS_REASONS.map(([key, label]) => {
@@ -714,11 +808,13 @@ function FeedbackPage({ review, proposals, onOpen }: { review: Review; proposals
   );
 }
 
+const KIND_NAME: Record<Kind, string> = { bug: "Bug", idea: "Design idea", proposal: "Redesign", improvement: "Improvement" };
+
 function FeedbackCard({ d, title, onOpen }: { d: Decision; title: string; onOpen: (id: string) => void }) {
   return (
     <button type="button" className="card text-card" onClick={() => onOpen(d.id)} aria-label={`${d.id}: ${title}. Open details`}>
       <span className="card-body">
-        <span className="card-id">{d.id} · {d.kind === "bug" ? "Bug" : d.kind === "proposal" ? "Redesign" : "Design idea"}</span>
+        <span className="card-id">{d.id} · {KIND_NAME[d.kind]}</span>
         <span className="card-title">{title}</span>
         {d.note && <span className="card-note">“{d.note}”</span>}
         <span className="card-meta">@{d.by}</span>

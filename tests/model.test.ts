@@ -60,4 +60,7 @@ test("redesigns group their ideas and ideas follow the redesign decision", () =>
   const known = new Map<string, Kind>([["RD-01", "proposal"]]);
   assert.equal(validateDecision({ id: "RD-01", kind: "proposal", status: "later" }, known).status, "later");
   assert.throws(() => validateDecision({ id: "RD-01", kind: "proposal", status: "fixing" }, known));
+  const withImprovement = new Map<string, Kind>([["IM-01", "improvement"]]);
+  assert.equal(validateDecision({ id: "IM-01", kind: "improvement", status: "planned" }, withImprovement).status, "planned");
+  assert.throws(() => validateDecision({ id: "IM-01", kind: "idea", status: "planned" }, withImprovement));
 });

@@ -47,3 +47,9 @@ export const Learn = () => (
     <path d="M4 17a3 3 0 0 1 3-3h11" />
   </svg>
 );
+export const Spark = () => (
+  <svg {...base}>
+    <path d="M9 18h6M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3Z" />
+  </svg>
+);

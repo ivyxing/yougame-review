@@ -1,7 +1,7 @@
 // Shared by the browser app and the server functions.
 
 export type Severity = "critical" | "high" | "medium" | "low";
-export type Kind = "bug" | "idea" | "proposal";
+export type Kind = "bug" | "idea" | "proposal" | "improvement";
 
 export interface Evidence {
   screenshots?: string[];
@@ -55,6 +55,13 @@ export interface Proposal {
   agent_prompt?: string;
 }
 
+/** A product idea beyond bugs and design fixes: a feature, engagement or growth change. */
+export interface Improvement extends Idea {
+  effort?: "small" | "medium" | "large";
+  /** Ids of bugs, design ideas or other improvements it builds on. */
+  related?: string[];
+}
+
 export const BUG_STATUSES = ["open", "fixing", "fixed", "dismissed"] as const;
 export const IDEA_STATUSES = ["open", "planned", "later", "done", "dismissed"] as const;
 export type BugStatus = (typeof BUG_STATUSES)[number];
@@ -65,6 +72,7 @@ export const STATUS_LABEL: Record<Kind, Record<string, string>> = {
   bug: { open: "Open", fixing: "Fixing", fixed: "Fixed", dismissed: "Dismissed" },
   idea: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
   proposal: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
+  improvement: { open: "Needs your take", planned: "Will do", later: "Maybe later", done: "Done", dismissed: "Dismissed" },
 };
 
 export const DISMISS_REASONS = [

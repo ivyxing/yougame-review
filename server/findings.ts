@@ -1,16 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Bug, Idea, Kind, Proposal } from "../src/model.js";
+import type { Bug, Idea, Improvement, Kind, Proposal } from "../src/model.js";
 
 const root = process.cwd();
 
-export async function loadFindings(): Promise<{ bugs: Bug[]; ideas: Idea[]; proposals: Proposal[] }> {
-  const [bugs, ideas, proposals] = await Promise.all([
+export async function loadFindings(): Promise<{ bugs: Bug[]; ideas: Idea[]; proposals: Proposal[]; improvements: Improvement[] }> {
+  const [bugs, ideas, proposals, improvements] = await Promise.all([
     readList<Bug>("data/bugs.json"),
     readList<Idea>("data/ux.json"),
     readList<Proposal>("data/proposals.json").catch(() => []),
+    readList<Improvement>("data/improvements.json").catch(() => []),
   ]);
-  return { bugs, ideas, proposals };
+  return { bugs, ideas, proposals, improvements };
 }
 
 async function readList<T>(path: string): Promise<T[]> {
@@ -19,11 +20,12 @@ async function readList<T>(path: string): Promise<T[]> {
 }
 
 export async function knownItems(): Promise<Map<string, Kind>> {
-  const { bugs, ideas, proposals } = await loadFindings();
+  const { bugs, ideas, proposals, improvements } = await loadFindings();
   return new Map<string, Kind>([
     ...bugs.map((b) => [b.id, "bug"] as const),
     ...ideas.map((i) => [i.id, "idea"] as const),
     ...proposals.map((p) => [p.id, "proposal"] as const),
+    ...improvements.map((i) => [i.id, "improvement"] as const),
   ]);
 }
 
