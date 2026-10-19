@@ -1,22 +1,31 @@
 # YouGame Beta Review
 
-A small review board for [yougame.co](https://yougame.co): bugs found in beta testing and design suggestions, each with a plain-language write-up for people and a copy-ready prompt for coding agents.
+A review site for [yougame.co](https://yougame.co): bugs found in beta testing and design ideas, each with screenshots, a plain-language write-up for people, and a copy-ready prompt for coding agents. People mark items fixed, planned or dismissed, and leave notes. Those decisions are saved to [`feedback/decisions.json`](feedback/README.md) in this repository, where future scans read them.
 
-## View it
-
-- **Live board (saves statuses and notes):** https://claude.ai/artifact/BcwTUsHBG3joki2KkLrWxr
-- **Locally:** run `python3 -m http.server` in this folder and open http://localhost:8000. The local copy is read-only, because saving statuses and notes only works on the live board.
-
-## What's in here
+## How it works
 
 | Path | What it is |
 | --- | --- |
-| `index.html` | The whole site: one page, no build step, no dependencies. |
-| `data/bugs.json` | Bugs. Fields: `id`, `title`, `severity` (critical/high/medium/low), `area`, `url`, `status` (needs_screenshot/verified/fixed), `summary`, `steps`, `expected`, `actual`, `evidence` (`screenshots`, `notes`, `console`), `agent_prompt`. |
-| `data/ux.json` | Design ideas. Fields: `id`, `title`, `area`, `priority`, `page_url`, `problem`, `why_it_matters`, `recommendation`, `before_screenshot`, `after_image`, `figma_url`, `agent_prompt`. |
-| `screenshots/` | Evidence screenshots and redesign mock images, referenced from the JSON by relative path. |
-| `sync.py` | Used by Claude to copy fresh findings from the project into `data/` and `screenshots/`. |
+| `src/` | The React app: Bugs, Design ideas and Scan feedback pages, with details in a side drawer. |
+| `api/` | Vercel functions: GitHub sign-in, the review data, screenshots, and saving decisions. |
+| `server/` | Shared server code: session, GitHub reads and writes, findings on disk. |
+| `data/bugs.json`, `data/ux.json` | The findings. Edit them to add, reword or remove items. |
+| `screenshots/` | Evidence screenshots and redesign mocks, referenced from the JSON. |
+| `feedback/decisions.json` | Saved decisions. Written by the site, one commit per save. |
+| `sync.py` | Copies fresh findings from the Claude project into `data/` and `screenshots/`. |
+| `legacy-index.html` | The original single-page version, kept for reference. |
 
-## Editing
+Only people who can read this repository can sign in, and only people who can push to it can save decisions. Saving a decision commits as that person using their own GitHub sign-in. Commits that only touch `feedback/` don't trigger a redeploy (`ignoreCommand` in `vercel.json`).
 
-Edit the JSON files to add, reword or remove items; the page picks up any field it knows and ignores the rest. Image paths are relative to the repo root. In `index.html`, human-facing content and agent prompts are styled differently on purpose: agent prompts always sit in the dark "for agents" panels.
+## Run it locally
+
+```sh
+npm install
+npm test
+npm run preview:local   # builds, then serves on http://localhost:4173 with an in-memory stand-in for GitHub
+```
+
+## Deploy
+
+1. Create a GitHub App (Settings → Developer settings → GitHub Apps) with the callback URL `https://<your-domain>/api/auth/callback`, "Request user authorization (OAuth) during installation" off, and the repository permission **Contents: Read and write**. Install it on this repository only.
+2. Import this repository into Vercel. Add the environment variables from `.env.example`: `BASE_URL` (the site's origin), `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (from the GitHub App), and `SESSION_SECRET` (at least 32 random characters, for example from `openssl rand -base64 32`).
