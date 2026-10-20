@@ -30,5 +30,5 @@ npm run preview:local   # builds, then serves on http://localhost:4173 with an i
 
 ## Deploy
 
-1. Create a GitHub App (Settings → Developer settings → GitHub Apps) with the callback URL `https://<your-domain>/api/auth/callback`, "Request user authorization (OAuth) during installation" off, and the repository permission **Contents: Read and write**. Install it on this repository only.
+1. Create a GitHub App (Settings → Developer settings → GitHub Apps) with the callback URL `https://<your-domain>/api/auth/callback`, "Request user authorization (OAuth) during installation" off, and the repository permission **Contents: Read and write**. Install it on this repository only. Leave "Expire user authorization tokens" on: GitHub then issues a refresh token, which keeps people signed in for about 6 months instead of 8 hours.
 2. Import this repository into Vercel. Add the environment variables from `.env.example`: `BASE_URL` (the site's origin), `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (from the GitHub App), and `SESSION_SECRET` (at least 32 random characters, for example from `openssl rand -base64 32`).

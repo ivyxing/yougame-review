@@ -46,7 +46,21 @@ type BugGrouped = ReturnType<typeof groupBugs>;
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 /** Screenshots are behind sign-in, so a failed image usually means the session expired while the tab stayed open. */
 const IMAGE_FAILED = "review:image-failed";
-const imageFailed = () => window.dispatchEvent(new Event(IMAGE_FAILED));
+const IMAGES_RETRY = "review:images-retry";
+
+/** A screenshot that asks the page to check the sign-in when it fails, and tries again once the page says so. */
+function Screenshot({ path, alt = "", lazy = true }: { path: string; alt?: string; lazy?: boolean }) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!failed) return;
+    const retry = () => { setFailed(false); setAttempt((n) => n + 1); };
+    window.addEventListener(IMAGES_RETRY, retry);
+    return () => window.removeEventListener(IMAGES_RETRY, retry);
+  }, [failed]);
+  const src = attempt ? `${img(path)}&retry=${attempt}` : img(path);
+  return <img src={src} alt={alt} loading={lazy ? "lazy" : undefined} onError={() => { setFailed(true); window.dispatchEvent(new Event(IMAGE_FAILED)); }} />;
+}
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
 const PAGES: Page[] = ["bugs", "ideas", "improvements", "feedback"];
 const pageOf = (id: string): Page => (/^(BUG|BG)-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
@@ -84,17 +98,22 @@ export function App() {
     void load();
   }, [load]);
 
-  // The page keeps working from memory after the 8-hour sign-in ends, but every new screenshot is refused.
-  // Check the session when an image fails or the tab comes back, and ask to sign in again if it has ended.
+  // GitHub sign-in tokens last 8 hours. Screenshots don't renew them, so a long-open tab can have images refused.
+  // When an image fails or the tab comes back, reload the review (which renews the sign-in) or ask to sign in again.
   const checking = useRef(0);
   useEffect(() => {
     const recheck = async () => {
       if (Date.now() - checking.current < 30_000) return;
       checking.current = Date.now();
+      // Loading the review also renews the GitHub sign-in when it can, so images refused a moment ago load on retry.
       const r = await fetch("/api/review", { credentials: "same-origin" }).catch(() => null);
       if (r?.status === 401) {
         setError({ status: 401, message: "Your sign-in expired. Sign in again to keep reviewing.", expired: true });
         setReview(null);
+      } else if (r?.ok) {
+        const body = await r.json().catch(() => null);
+        if (body) setReview(body as Review);
+        window.dispatchEvent(new Event(IMAGES_RETRY));
       }
     };
     const onVisible = () => { if (document.visibilityState === "visible") void recheck(); };
@@ -508,7 +527,7 @@ function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; t
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
       {thumbs && (
         <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
-          {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" onError={imageFailed} />) : <span className="no-shot">No screenshot</span>}
+          {thumbs.length ? thumbs.slice(0, 2).map((t) => <Screenshot key={t} path={t} />) : <span className="no-shot">No screenshot</span>}
         </span>
       )}
       <span className="card-body">
@@ -667,7 +686,7 @@ function Drawer({ entry, decisions, review, grouped, bugGrouped, canWrite, onOpe
 function Shot({ src, label, onZoom }: { src: string; label: string; onZoom: (s: string) => void }) {
   return (
     <button type="button" className="shot" onClick={() => onZoom(src)} aria-label={`${label}, view full size`}>
-      <img src={img(src)} alt="" loading="lazy" onError={imageFailed} />
+      <Screenshot path={src} />
       <span className="shot-label">{label}<Examine /></span>
     </button>
   );
@@ -849,7 +868,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={screenshotLabel(src)} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <button ref={ref} type="button" className="icon-btn lightbox-close" aria-label="Close full size image" onClick={onClose}><Close /></button>
-      <img src={img(src)} alt={screenshotLabel(src)} onError={imageFailed} />
+      <Screenshot path={src} alt={screenshotLabel(src)} lazy={false} />
     </div>
   );
 }
