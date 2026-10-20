@@ -165,5 +165,84 @@
   "why_it_matters": "It's unclear how many players want it. A count would show whether a Linux build is worth it, and would stop the same question appearing in comments.",
   "recommendation": "On unsupported systems, replace the dead-end with \"Not on Linux yet. Tell me when it is\", which records interest (and an email if signed in). Show the creator and team the running count.",
   "agent_prompt": "On yougame.co, capture demand for unsupported desktop platforms. (1) Detect Linux and SteamOS (Steam Deck) from the user agent on emulator game pages. (2) In place of the desktop app download, show \"Not on <platform> yet\" with a \"Tell me when it's ready\" button. (3) Store one interest record per player or browser per platform (signed-in: with their account email for a one-time notification; guests: anonymous count only). (4) Show the count to admins and in the creator dashboard if it exists. (5) When the platform ships, send the one-time email and remove the records."
+ },
+ {
+  "id": "IM-11",
+  "title": "Make runtime requirements readable without colour",
+  "area": "Discovery / Accessibility",
+  "priority": "medium",
+  "effort": "small",
+  "page_url": "https://yougame.co/?sort=top",
+  "after_image": "screenshots/ux/mocks/home-option-a.png",
+  "related": [
+   "RD-01",
+   "UX-03",
+   "UX-04",
+   "IM-03"
+  ],
+  "problem": "Proposal review: RD-01's mixed grid distinguishes browser and desktop games with mint and cream card fills and a legend. Individual cards show no written runtime requirement. UX-03 already adds runtime to accessible names; the remaining gap is a visible cue for sighted people who cannot distinguish the fills or have scrolled past the legend. The image is the existing proposal, not a new design or evidence of a live failure.",
+  "why_it_matters": "A player should be able to tell whether a game opens in the browser or needs the desktop app and their own copy before choosing it, without remembering a colour key.",
+  "recommendation": "Validate a short, visible requirement on each mixed-grid card, such as 'Browser' or 'Desktop + your copy', while keeping RD-01's hierarchy. Accept when every card's runtime is identifiable in greyscale with the legend out of view, on touch without hovering, and through its accessible name. Treat this as a proposed refinement to review, not an adopted change to RD-01.",
+  "agent_prompt": "Evaluate a visible non-colour runtime cue for mixed game grids on yougame.co. This complements UX-03's accessible names and IM-03's device-aware discovery; do not redesign the filtering or readiness model. Compare RD-01's existing treatment with a compact plain-text requirement ('Browser' or 'Desktop + your copy') derived from the same runtime data as the accessible name. Preserve the existing proposal as the baseline until a refinement is accepted. Acceptance: (1) with card colours removed and the legend outside the viewport, a sighted reader can identify the runtime and own-copy requirement for every card; (2) this information needs no hover on touch; (3) keyboard and screen-reader users receive the same requirement once in the card's accessible name; (4) long titles and requirements remain readable at narrow widths and 200% text. Record which treatment was tested and the result. These are proposed criteria, not reproduced bugs."
+ },
+ {
+  "id": "IM-12",
+  "title": "Help players recover when setup cannot continue",
+  "area": "Game page / Setup",
+  "priority": "high",
+  "effort": "medium",
+  "page_url": "https://yougame.co/g/project-rollback",
+  "after_image": "screenshots/ux/mocks/game-page-emulator.png",
+  "related": [
+   "RD-02",
+   "UX-06",
+   "IM-03",
+   "IM-04",
+   "IM-10"
+  ],
+  "problem": "RD-02 shows the desktop app found and 'Add your copy' as the next step. UX-06 specifies the checklist, and IM-04 measures drop-off, but neither defines recovery when detection, file validation or launch fails. This is proposed state coverage for the setup flow; no unsupported-device, file or launch failure was reproduced in this review.",
+  "why_it_matters": "A checklist can strand someone after they have installed the app or selected a file unless it explains what failed and which step to retry. Restarting the entire setup wastes completed work.",
+  "recommendation": "Give each blocked step a specific reason and next action: supported-device guidance, choose a supported edition, locate a missing or moved file, check the app again, or retry launch. Accept when each case has a reachable recovery path, preserves valid completed steps, and never shows 'Ready' or 'Playing' before the app confirms it. Reuse the unsupported-device routes proposed in IM-03 and IM-10.",
+  "agent_prompt": "Extend the proposed UX-06/RD-02 setup checklist with recovery states, keeping its three-step structure. Define and exercise: unsupported OS; unsupported file type; wrong game edition; missing file; moved file; app-detection failure or timeout; launch failure. Reuse IM-03/IM-10's unsupported-device alternatives rather than creating another platform feature. For each state specify the visible reason, one relevant next action and the resulting state. Offer 'Choose another file' for invalid input, 'Locate file' for a missing/moved reference, 'Check again' after app-detection failure, and 'Try again' plus relevant help after launch failure. Use available app confirmations: a download click is not installation, an unanswered detection request is not proof the app is absent, and a launch request is not successful play. Acceptance: simulate every case, verify the stated recovery works, retain completed steps that remain valid, announce status changes without moving keyboard focus, and confirm the primary action always reflects the first unresolved step. Keep files local and avoid exposing file paths in feedback or analytics. This is a proposed coverage matrix, not a report of reproduced bugs."
+ },
+ {
+  "id": "IM-13",
+  "title": "Make help filters reversible and answers easy to find",
+  "area": "Game page / Community",
+  "priority": "medium",
+  "effort": "medium",
+  "page_url": "https://yougame.co/g/project-rollback",
+  "after_image": "screenshots/ux/mocks/game-page-emulator.png",
+  "related": [
+   "RD-02",
+   "UX-12",
+   "IM-07"
+  ],
+  "problem": "In the RD-02 mock, comments say support threads are already filtered out while the action still says 'Hide help questions'. Known issues show 'In progress' without a visible source or update date. UX-12 proposes tagging and an owner-editable issue list, while IM-07 adds a creator inbox; neither specifies the reader's filter/reset states or a direct route from a resolved question to its answer. These are proposal gaps, not live filter failures.",
+  "why_it_matters": "Players need to know which conversations they are seeing and get excluded questions back. A resolved label is useful only when it leads to an answer, and a progress claim needs someone maintaining it.",
+  "recommendation": "Use explicit All, Discussion and Help filters with the current choice visible; show a count for that view and 'Show all comments' when it is empty. Link resolved questions to the accepted answer or maintained help page. Accept when switching filters and resetting restores the expected threads, every resolved link opens its answer, and 'In progress' appears only for a maintained issue with an owner and update date.",
+  "agent_prompt": "Refine the reader-facing help flow proposed in UX-12/RD-02, reusing its comment tags and IM-07's issue records if available. Use mutually exclusive All, Discussion and Help filters with visible and programmatic selected state. Show the matching count; an empty filtered view offers 'Show all comments'. Provide a direct answer/help link on resolved questions, preserving a route back to the originating thread. Source issue status from an owner-maintained record and show when it was updated; do not infer 'In progress' from a reply or copy the mock's example statuses into production. Acceptance: with a fixture containing both discussion and help threads, each filter shows only its intended set, All/reset restores all threads, and the label and count agree; keyboard and touch can switch and reset; every resolved link reaches the correct answer; an issue without a maintained status source shows no progress claim. This complements the existing support panel and creator inbox rather than replacing them."
+ },
+ {
+  "id": "IM-14",
+  "title": "Validate redesigned browse and setup on phones",
+  "area": "Mobile web / Accessibility",
+  "priority": "medium",
+  "effort": "medium",
+  "page_url": "https://yougame.co/?sort=top",
+  "after_image": "screenshots/ux/mocks/home-option-a.png",
+  "related": [
+   "RD-01",
+   "RD-02",
+   "UX-02",
+   "UX-06",
+   "UX-09",
+   "UX-14",
+   "IM-03"
+  ],
+  "problem": "The checked-in RD-01 and RD-02 images are 1440px-wide desktop mocks: a long filter bar and four-column game grid, plus a two-column setup page. UX-14 checks the header at 375px and UX-09 covers headings and labels, but the proposals do not specify end-to-end mobile browse/setup acceptance. Static desktop images do not establish touch, text-resize or mobile accessibility.",
+  "why_it_matters": "A phone visitor still needs to browse, understand desktop requirements and find help even when the selected game cannot run on that phone. A collapsed header alone does not prove those journeys work.",
+  "recommendation": "Validate the proposed browse-to-game and setup-to-help journeys at 320, 375 and 768 CSS px, including 200% text. Accept when controls and requirements stay readable without page-wide horizontal scrolling, phone targets are at least 44 by 44 CSS px, help works by tap and keyboard, and unsupported devices get the clear alternative already proposed in IM-03. Record browser/device evidence and any gaps before calling the redesign ready.",
+  "agent_prompt": "Add a concrete mobile validation pass for the existing RD-01/RD-02 proposals; do not treat their desktop mocks as proof of mobile support. Exercise browse -> filters -> game details and setup -> requirements -> help at 320, 375 and 768 CSS px, and separately at 200% text. Acceptance: (1) filter controls, long game titles, supported editions and the next setup action reflow without clipping or page-wide horizontal scrolling; (2) interactive targets at phone widths are at least 44 by 44 CSS px; (3) runtime/requirements and 'Which files work?' are available by tap and keyboard without hover; (4) focus stays visible, disclosures expose expanded state, and closing a dialog returns focus to its trigger; (5) an unsupported phone shows the IM-03 alternative and never suggests the desktop game will launch there; (6) the browser-game Play action remains reachable when the mobile keyboard is open or dismissed. Check at least iOS Safari with VoiceOver and Android Chrome with TalkBack when devices are available, recording device, browser, viewport and results. Mark unavailable checks as untested; screenshots alone do not pass interaction criteria. Keep this validation proposal separate from adoption of either redesign."
  }
 ]
