@@ -44,6 +44,9 @@ type Grouped = ReturnType<typeof groupIdeas>;
 type BugGrouped = ReturnType<typeof groupBugs>;
 
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
+/** Screenshots are behind sign-in, so a failed image usually means the session expired while the tab stayed open. */
+const IMAGE_FAILED = "review:image-failed";
+const imageFailed = () => window.dispatchEvent(new Event(IMAGE_FAILED));
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
 const PAGES: Page[] = ["bugs", "ideas", "improvements", "feedback"];
 const pageOf = (id: string): Page => (/^(BUG|BG)-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
@@ -57,7 +60,7 @@ function pageFromHash(): { page: Page; open?: string } {
 
 export function App() {
   const [review, setReview] = useState<Review | null>(null);
-  const [error, setError] = useState<{ status: number; message: string } | null>(null);
+  const [error, setError] = useState<{ status: number; message: string; expired?: boolean } | null>(null);
   const initial = useMemo(pageFromHash, []);
   const [page, setPage] = useState<Page>(initial.page);
   const [openId, setOpenId] = useState<string | undefined>(initial.open);
@@ -80,6 +83,28 @@ export function App() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The page keeps working from memory after the 8-hour sign-in ends, but every new screenshot is refused.
+  // Check the session when an image fails or the tab comes back, and ask to sign in again if it has ended.
+  const checking = useRef(0);
+  useEffect(() => {
+    const recheck = async () => {
+      if (Date.now() - checking.current < 30_000) return;
+      checking.current = Date.now();
+      const r = await fetch("/api/review", { credentials: "same-origin" }).catch(() => null);
+      if (r?.status === 401) {
+        setError({ status: 401, message: "Your sign-in expired. Sign in again to keep reviewing.", expired: true });
+        setReview(null);
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") void recheck(); };
+    window.addEventListener(IMAGE_FAILED, recheck);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener(IMAGE_FAILED, recheck);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   useEffect(() => {
     const hash = openId ?? page;
@@ -177,7 +202,7 @@ function NavItem({ icon, label, count, countLabel, active, onClick }: { icon: Re
   );
 }
 
-function SignedOut({ error }: { error: { status: number; message: string } }) {
+function SignedOut({ error }: { error: { status: number; message: string; expired?: boolean } }) {
   const params = new URLSearchParams(location.search);
   const signinError = params.get("signin_error");
   const notSetUp = error.status === 503 && /set up/.test(error.message);
@@ -185,8 +210,8 @@ function SignedOut({ error }: { error: { status: number; message: string } }) {
     <div className="signed-out">
       <div className="signin-card">
         <h1>YouGame review</h1>
-        {error.status === 401 && !signinError && <p>Bugs and design ideas from the YouGame beta. Sign in with the GitHub account that has access to the review repository.</p>}
-        {(signinError || error.status !== 401) && <p className="error">{signinError ?? error.message}</p>}
+        {error.status === 401 && !signinError && !error.expired && <p>Bugs and design ideas from the YouGame beta. Sign in with the GitHub account that has access to the review repository.</p>}
+        {(signinError || error.status !== 401 || error.expired) && <p className="error">{signinError ?? error.message}</p>}
         {!notSetUp && (
           <a className="btn primary" href="/api/auth/login">Sign in with GitHub</a>
         )}
@@ -483,7 +508,7 @@ function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; t
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
       {thumbs && (
         <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
-          {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
+          {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" onError={imageFailed} />) : <span className="no-shot">No screenshot</span>}
         </span>
       )}
       <span className="card-body">
@@ -642,7 +667,7 @@ function Drawer({ entry, decisions, review, grouped, bugGrouped, canWrite, onOpe
 function Shot({ src, label, onZoom }: { src: string; label: string; onZoom: (s: string) => void }) {
   return (
     <button type="button" className="shot" onClick={() => onZoom(src)} aria-label={`${label}, view full size`}>
-      <img src={img(src)} alt="" loading="lazy" />
+      <img src={img(src)} alt="" loading="lazy" onError={imageFailed} />
       <span className="shot-label">{label}<Examine /></span>
     </button>
   );
@@ -824,7 +849,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={screenshotLabel(src)} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <button ref={ref} type="button" className="icon-btn lightbox-close" aria-label="Close full size image" onClick={onClose}><Close /></button>
-      <img src={img(src)} alt={screenshotLabel(src)} />
+      <img src={img(src)} alt={screenshotLabel(src)} onError={imageFailed} />
     </div>
   );
 }
