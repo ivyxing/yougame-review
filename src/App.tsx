@@ -48,6 +48,15 @@ const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 const IMAGE_FAILED = "review:image-failed";
 const IMAGES_RETRY = "review:images-retry";
 
+// A review request can renew the sign-in cookie. Signing out waits for those, so a late renewal can't sign back in.
+const inFlight = new Set<Promise<unknown>>();
+function tracked<T>(request: Promise<T>): Promise<T> {
+  inFlight.add(request);
+  void request.finally(() => inFlight.delete(request)).catch(() => {});
+  return request;
+}
+const settled = () => Promise.allSettled([...inFlight]);
+
 /** A screenshot that asks the page to check the sign-in when it fails, and tries again once the page says so. */
 function Screenshot({ path, alt = "", lazy = true }: { path: string; alt?: string; lazy?: boolean }) {
   const [attempt, setAttempt] = useState(0);
@@ -82,7 +91,7 @@ export function App() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/review", { credentials: "same-origin" });
+      const r = await tracked(fetch("/api/review", { credentials: "same-origin" }));
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError({ status: r.status, message: body.error ?? "Couldn't load the review." });
@@ -106,13 +115,15 @@ export function App() {
       if (Date.now() - checking.current < 30_000) return;
       checking.current = Date.now();
       // Loading the review also renews the GitHub sign-in when it can, so images refused a moment ago load on retry.
-      const r = await fetch("/api/review", { credentials: "same-origin" }).catch(() => null);
+      // Only the sign-in is refreshed here: replacing the review could undo a decision saved meanwhile.
+      // Another tab may have just used the same one-time refresh token, so a 401 is retried once after it lands.
+      const check = () => tracked(fetch("/api/review", { credentials: "same-origin" }).catch(() => null));
+      let r = await check();
+      if (r?.status === 401) r = await new Promise<Response | null>((done) => window.setTimeout(() => void check().then(done), 1500));
       if (r?.status === 401) {
         setError({ status: 401, message: "Your sign-in expired. Sign in again to keep reviewing.", expired: true });
         setReview(null);
       } else if (r?.ok) {
-        const body = await r.json().catch(() => null);
-        if (body) setReview(body as Review);
         window.dispatchEvent(new Event(IMAGES_RETRY));
       }
     };
@@ -192,7 +203,7 @@ export function App() {
         </nav>
         <div className="me">
           <span className="login">@{review.viewer.login}</span>
-          <button className="link" type="button" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); location.reload(); }}>Sign out</button>
+          <button className="link" type="button" onClick={async () => { await settled(); await fetch("/api/auth/logout", { method: "POST" }); location.reload(); }}>Sign out</button>
         </div>
       </aside>
 

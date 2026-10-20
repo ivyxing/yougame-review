@@ -87,20 +87,21 @@ export async function activeViewer(session: IronSession<SessionData>, now = Date
     // Parallel requests can race to use the same single-use refresh token. A losing request answers 401
     // without touching the cookie, so it can't sign out the request that won.
     const tokens = await refreshTokens(viewer.refreshToken!, config());
-    let access: { canWrite: boolean };
-    try {
-      access = await checkRepoAccess(tokens.token);
-    } catch (error) {
-      if (error instanceof HttpError && error.status === 403) session.destroy();
-      throw error;
-    }
+    // GitHub has now retired the old refresh token, so the new one is saved even if the checks below fail.
     session.viewer = {
+      ...viewer,
       token: tokens.token,
       refreshToken: tokens.refreshToken,
-      login: viewer.login,
-      canWrite: access.canWrite,
       ...lifetimes(tokens.expiresIn, tokens.refreshExpiresIn, now),
     };
+    try {
+      const [user, access] = await Promise.all([githubUser(tokens.token), checkRepoAccess(tokens.token)]);
+      session.viewer = { ...session.viewer, login: user.login, canWrite: access.canWrite };
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 403) session.destroy();
+      else await session.save();
+      throw error;
+    }
     await session.save();
     return session.viewer;
   }
