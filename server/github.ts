@@ -39,10 +39,10 @@ export async function checkRepoAccess(token: string, transport?: Transport): Pro
     {},
     transport,
   );
-  if (status === 403 || status === 404 || body?.full_name?.toLowerCase() !== `${OWNER}/${REPO}` || body.permissions?.pull === false) {
+  if (status !== 200 && status !== 403 && status !== 404) throw new HttpError(503, "GitHub is temporarily unavailable.");
+  if (status !== 200 || body?.full_name?.toLowerCase() !== `${OWNER}/${REPO}` || body.permissions?.pull === false) {
     throw new HttpError(403, `Your GitHub account doesn't have access to ${OWNER}/${REPO}. Ask Ivy to add you.`);
   }
-  if (status !== 200) throw new HttpError(503, "GitHub is temporarily unavailable.");
   return { canWrite: body.permissions?.push === true };
 }
 

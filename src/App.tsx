@@ -44,6 +44,32 @@ type Grouped = ReturnType<typeof groupIdeas>;
 type BugGrouped = ReturnType<typeof groupBugs>;
 
 const img = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
+/** Screenshots are behind sign-in, so a failed image usually means the session expired while the tab stayed open. */
+const IMAGE_FAILED = "review:image-failed";
+const IMAGES_RETRY = "review:images-retry";
+
+// A review request can renew the sign-in cookie. Signing out waits for those, so a late renewal can't sign back in.
+const inFlight = new Set<Promise<unknown>>();
+function tracked<T>(request: Promise<T>): Promise<T> {
+  inFlight.add(request);
+  void request.finally(() => inFlight.delete(request)).catch(() => {});
+  return request;
+}
+const settled = () => Promise.allSettled([...inFlight]);
+
+/** A screenshot that asks the page to check the sign-in when it fails, and tries again once the page says so. */
+function Screenshot({ path, alt = "", lazy = true }: { path: string; alt?: string; lazy?: boolean }) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!failed) return;
+    const retry = () => { setFailed(false); setAttempt((n) => n + 1); };
+    window.addEventListener(IMAGES_RETRY, retry);
+    return () => window.removeEventListener(IMAGES_RETRY, retry);
+  }, [failed]);
+  const src = attempt ? `${img(path)}&retry=${attempt}` : img(path);
+  return <img src={src} alt={alt} loading={lazy ? "lazy" : undefined} onError={() => { setFailed(true); window.dispatchEvent(new Event(IMAGE_FAILED)); }} />;
+}
 const cap = (t?: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
 const PAGES: Page[] = ["bugs", "ideas", "improvements", "feedback"];
 const pageOf = (id: string): Page => (/^(BUG|BG)-/i.test(id) ? "bugs" : /^IM-/i.test(id) ? "improvements" : "ideas");
@@ -57,7 +83,7 @@ function pageFromHash(): { page: Page; open?: string } {
 
 export function App() {
   const [review, setReview] = useState<Review | null>(null);
-  const [error, setError] = useState<{ status: number; message: string } | null>(null);
+  const [error, setError] = useState<{ status: number; message: string; expired?: boolean } | null>(null);
   const initial = useMemo(pageFromHash, []);
   const [page, setPage] = useState<Page>(initial.page);
   const [openId, setOpenId] = useState<string | undefined>(initial.open);
@@ -65,7 +91,7 @@ export function App() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/review", { credentials: "same-origin" });
+      const r = await tracked(fetch("/api/review", { credentials: "same-origin" }));
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError({ status: r.status, message: body.error ?? "Couldn't load the review." });
@@ -80,6 +106,35 @@ export function App() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // GitHub sign-in tokens last 8 hours. Screenshots don't renew them, so a long-open tab can have images refused.
+  // When an image fails or the tab comes back, reload the review (which renews the sign-in) or ask to sign in again.
+  const checking = useRef(0);
+  useEffect(() => {
+    const recheck = async () => {
+      if (Date.now() - checking.current < 30_000) return;
+      checking.current = Date.now();
+      // Loading the review also renews the GitHub sign-in when it can, so images refused a moment ago load on retry.
+      // Only the sign-in is refreshed here: replacing the review could undo a decision saved meanwhile.
+      // Another tab may have just used the same one-time refresh token, so a 401 is retried once after it lands.
+      const check = () => tracked(fetch("/api/review", { credentials: "same-origin" }).catch(() => null));
+      let r = await check();
+      if (r?.status === 401) r = await new Promise<Response | null>((done) => window.setTimeout(() => void check().then(done), 1500));
+      if (r?.status === 401) {
+        setError({ status: 401, message: "Your sign-in expired. Sign in again to keep reviewing.", expired: true });
+        setReview(null);
+      } else if (r?.ok) {
+        window.dispatchEvent(new Event(IMAGES_RETRY));
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") void recheck(); };
+    window.addEventListener(IMAGE_FAILED, recheck);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener(IMAGE_FAILED, recheck);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   useEffect(() => {
     const hash = openId ?? page;
@@ -148,7 +203,7 @@ export function App() {
         </nav>
         <div className="me">
           <span className="login">@{review.viewer.login}</span>
-          <button className="link" type="button" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); location.reload(); }}>Sign out</button>
+          <button className="link" type="button" onClick={async () => { await settled(); await fetch("/api/auth/logout", { method: "POST" }); location.reload(); }}>Sign out</button>
         </div>
       </aside>
 
@@ -177,7 +232,7 @@ function NavItem({ icon, label, count, countLabel, active, onClick }: { icon: Re
   );
 }
 
-function SignedOut({ error }: { error: { status: number; message: string } }) {
+function SignedOut({ error }: { error: { status: number; message: string; expired?: boolean } }) {
   const params = new URLSearchParams(location.search);
   const signinError = params.get("signin_error");
   const notSetUp = error.status === 503 && /set up/.test(error.message);
@@ -185,8 +240,8 @@ function SignedOut({ error }: { error: { status: number; message: string } }) {
     <div className="signed-out">
       <div className="signin-card">
         <h1>YouGame review</h1>
-        {error.status === 401 && !signinError && <p>Bugs and design ideas from the YouGame beta. Sign in with the GitHub account that has access to the review repository.</p>}
-        {(signinError || error.status !== 401) && <p className="error">{signinError ?? error.message}</p>}
+        {error.status === 401 && !signinError && !error.expired && <p>Bugs and design ideas from the YouGame beta. Sign in with the GitHub account that has access to the review repository.</p>}
+        {(signinError || error.status !== 401 || error.expired) && <p className="error">{signinError ?? error.message}</p>}
         {!notSetUp && (
           <a className="btn primary" href="/api/auth/login">Sign in with GitHub</a>
         )}
@@ -483,7 +538,7 @@ function Card({ id, title, meta, status, thumbs, wide, onOpen }: { id: string; t
     <button type="button" className="card" onClick={() => onOpen(id)} aria-label={`${id}: ${title}${status ? `, ${status}` : ""}. Open details`}>
       {thumbs && (
         <span className={`thumb${thumbs.length > 1 ? " split" : ""}`}>
-          {thumbs.length ? thumbs.slice(0, 2).map((t) => <img key={t} src={img(t)} alt="" loading="lazy" />) : <span className="no-shot">No screenshot</span>}
+          {thumbs.length ? thumbs.slice(0, 2).map((t) => <Screenshot key={t} path={t} />) : <span className="no-shot">No screenshot</span>}
         </span>
       )}
       <span className="card-body">
@@ -642,7 +697,7 @@ function Drawer({ entry, decisions, review, grouped, bugGrouped, canWrite, onOpe
 function Shot({ src, label, onZoom }: { src: string; label: string; onZoom: (s: string) => void }) {
   return (
     <button type="button" className="shot" onClick={() => onZoom(src)} aria-label={`${label}, view full size`}>
-      <img src={img(src)} alt="" loading="lazy" />
+      <Screenshot path={src} />
       <span className="shot-label">{label}<Examine /></span>
     </button>
   );
@@ -824,7 +879,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={screenshotLabel(src)} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <button ref={ref} type="button" className="icon-btn lightbox-close" aria-label="Close full size image" onClick={onClose}><Close /></button>
-      <img src={img(src)} alt={screenshotLabel(src)} />
+      <Screenshot path={src} alt={screenshotLabel(src)} lazy={false} />
     </div>
   );
 }

@@ -4,7 +4,10 @@ import * as oauth from "oauth4webapi";
 import { checkRepoAccess, githubUser } from "./github.js";
 import { HttpError } from "./http.js";
 
-export const SESSION_SECONDS = 8 * 60 * 60;
+/** GitHub App user tokens last 8 hours; the refresh token that renews them lasts about 6 months. */
+export const SESSION_SECONDS = 184 * 24 * 60 * 60;
+const TOKEN_SECONDS = 8 * 60 * 60;
+const REFRESH_EARLY_MS = 60_000;
 const LOGIN_SECONDS = 10 * 60;
 const github: oauth.AuthorizationServer = {
   issuer: "https://github.com/login/oauth",
@@ -17,6 +20,8 @@ export interface Viewer {
   login: string;
   canWrite: boolean;
   expiresAt: number;
+  refreshToken?: string;
+  refreshExpiresAt?: number;
 }
 export interface SessionData {
   viewer?: Viewer;
@@ -58,17 +63,95 @@ export async function getSession(req: VercelRequest, res: VercelResponse): Promi
   });
 }
 
+function canRefresh(viewer: Viewer | undefined, now: number): boolean {
+  return Boolean(viewer?.refreshToken && Number.isFinite(viewer.refreshExpiresAt) && viewer.refreshExpiresAt! > now);
+}
+
+/**
+ * The signed-in viewer while their GitHub token is still valid. An expired token that can be refreshed
+ * is left in place for activeViewer to renew; anything else ends the session.
+ */
 export function sessionViewer(session: IronSession<SessionData>, now = Date.now()): Viewer {
   const viewer = session.viewer;
   if (!viewer?.token || !viewer.login || !Number.isFinite(viewer.expiresAt) || viewer.expiresAt <= now) {
-    session.destroy();
+    if (!canRefresh(viewer, now)) session.destroy();
     throw new HttpError(401, "Sign in with GitHub to see the review.");
   }
   return viewer;
 }
 
+/** Like sessionViewer, but quietly swaps an expiring GitHub token for a new one using the refresh token. */
+export async function activeViewer(session: IronSession<SessionData>, now = Date.now()): Promise<Viewer> {
+  const viewer = session.viewer;
+  if (viewer && viewer.expiresAt - REFRESH_EARLY_MS <= now && canRefresh(viewer, now)) {
+    // Parallel requests can race to use the same single-use refresh token. A losing request answers 401
+    // without touching the cookie, so it can't sign out the request that won.
+    const tokens = await refreshTokens(viewer.refreshToken!, config());
+    // GitHub has now retired the old refresh token, so the new one is saved even if the checks below fail.
+    session.viewer = {
+      ...viewer,
+      token: tokens.token,
+      refreshToken: tokens.refreshToken,
+      ...lifetimes(tokens.expiresIn, tokens.refreshExpiresIn, now),
+    };
+    try {
+      const [user, access] = await Promise.all([githubUser(tokens.token), checkRepoAccess(tokens.token)]);
+      session.viewer = { ...session.viewer, login: user.login, canWrite: access.canWrite };
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 403) session.destroy();
+      else await session.save();
+      throw error;
+    }
+    await session.save();
+    return session.viewer;
+  }
+  return sessionViewer(session, now);
+}
+
+/** Images only need a signed-in viewer, not a GitHub call, so they never refresh (the page does that first). */
 export async function requireViewer(req: VercelRequest, res: VercelResponse): Promise<Viewer> {
   return sessionViewer(await getSession(req, res));
+}
+
+function lifetimes(expiresIn: number | undefined, refreshExpiresIn: number | undefined, now: number) {
+  return {
+    expiresAt: now + Math.min(TOKEN_SECONDS, expiresIn ?? TOKEN_SECONDS) * 1000,
+    refreshExpiresAt: refreshExpiresIn ? now + Math.min(SESSION_SECONDS, refreshExpiresIn) * 1000 : undefined,
+  };
+}
+
+interface Tokens {
+  token: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  refreshExpiresIn?: number;
+}
+
+function tokensFrom(result: oauth.TokenEndpointResponse): Tokens {
+  const refreshExpiresIn = result.refresh_token_expires_in;
+  return {
+    token: result.access_token,
+    refreshToken: result.refresh_token,
+    expiresIn: typeof result.expires_in === "number" ? result.expires_in : undefined,
+    refreshExpiresIn: typeof refreshExpiresIn === "number" ? refreshExpiresIn : undefined,
+  };
+}
+
+async function refreshTokens(refreshToken: string, settings: AuthConfig): Promise<Tokens> {
+  const client: oauth.Client = { client_id: settings.clientId };
+  const response = await oauth.refreshTokenGrantRequest(github, client, oauth.ClientSecretPost(settings.clientSecret), refreshToken, {
+    signal: AbortSignal.timeout(12_000),
+    headers: { Accept: "application/json" },
+  });
+  if (response.status >= 500 || response.status === 429) throw new HttpError(503, "GitHub sign-in is temporarily unavailable.");
+  // GitHub reports OAuth errors with HTTP 200, for example a refresh token that was already used or revoked.
+  const body = (await response.clone().json().catch(() => ({}))) as { error?: string };
+  if (body.error) throw new HttpError(401, "Your sign-in expired. Sign in again to keep reviewing.");
+  try {
+    return tokensFrom(await oauth.processRefreshTokenResponse(github, client, response));
+  } catch {
+    throw new HttpError(503, "GitHub sign-in is temporarily unavailable.");
+  }
 }
 
 export async function beginLogin(session: IronSession<SessionData>, settings: AuthConfig, now = Date.now()): Promise<string> {
@@ -124,10 +207,15 @@ export async function completeLogin(session: IronSession<SessionData>, callback:
   } catch {
     throw new HttpError(503, "GitHub sign-in is temporarily unavailable.");
   }
-  const token = result.access_token;
-  const user = await githubUser(token);
-  const access = await checkRepoAccess(token);
-  const lifetime = Math.min(SESSION_SECONDS, typeof result.expires_in === "number" ? result.expires_in : SESSION_SECONDS);
-  session.viewer = { token, login: user.login, canWrite: access.canWrite, expiresAt: now + lifetime * 1000 };
+  const tokens = tokensFrom(result);
+  const user = await githubUser(tokens.token);
+  const access = await checkRepoAccess(tokens.token);
+  session.viewer = {
+    token: tokens.token,
+    refreshToken: tokens.refreshToken,
+    login: user.login,
+    canWrite: access.canWrite,
+    ...lifetimes(tokens.expiresIn, tokens.refreshExpiresIn, now),
+  };
   await session.save();
 }

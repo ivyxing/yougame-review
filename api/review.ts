@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getSession, sessionViewer } from "../server/auth.js";
+import { activeViewer, getSession } from "../server/auth.js";
 import { loadFindings } from "../server/findings.js";
 import { readDecisions } from "../server/github.js";
 import { HttpError, privateHeaders, sendError } from "../server/http.js";
@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const session = await getSession(req, res);
-    const viewer = sessionViewer(session);
+    const viewer = await activeViewer(session);
     const [findings, { decisions }] = await Promise.all([loadFindings(), readDecisions(viewer.token)]);
     res.status(200).json({ viewer: { login: viewer.login, canWrite: viewer.canWrite }, ...findings, decisions });
   } catch (error) {
