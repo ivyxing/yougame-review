@@ -58,6 +58,8 @@ export interface Proposal {
   area?: string;
   page_url?: string;
   summary?: string;
+  /** Each change in the redesign and the reason for it, one short line each. */
+  why?: string[];
   before_screenshot?: string | null;
   after_image?: string | null;
   figma_url?: string | null;

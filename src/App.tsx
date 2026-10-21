@@ -781,6 +781,13 @@ function ProposalBody({ proposal, ideas, decisions, onOpen, onZoom }: { proposal
         {proposal.figma_url && <OutLink href={proposal.figma_url}>Open the mock in Figma</OutLink>}
       </div>
       {proposal.summary && <Block title="What it changes"><p>{proposal.summary}</p></Block>}
+      {(proposal.why?.length ?? 0) > 0 && (
+        <Block title="Why these changes">
+          <ul className="reasons">
+            {proposal.why!.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </Block>
+      )}
       <Block title={`Ideas it answers · ${members.length}`}>
         <ul className="member-list">
           {members.map((i) => {

@@ -161,7 +161,7 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .pair > div { background: var(--sunken); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.evidence { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+.evidence, .reasons { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
 .evidence code { font-family: var(--mono); font-size: 13px; }
 .flag { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 .links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
