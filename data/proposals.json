@@ -23,10 +23,10 @@
   "title": "Game page for emulator games",
   "area": "Game page",
   "page_url": "https://yougame.co/g/project-rollback",
-  "summary": "A game page that puts the three setup steps in the hero, with the main button always showing the next step, and a \"Known issues & help\" panel above comments so support questions stop crowding the discussion.",
+  "summary": "A calmer game page for emulator games: the three setup steps sit inside the player with one button that always names the next step, one line of facts under the title, only Save and Share beside the creator (the rest under \"…\"), known issues folded into one line above the description, and a plain \"More like this\" list on the right.",
   "before_screenshot": "screenshots/ux/UX-06.png",
-  "after_image": "screenshots/ux/mocks/game-page-emulator.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-2",
+  "after_image": "screenshots/ux/mocks/game-page-emulator-calmer.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
   "ideas": [
    "UX-06",
    "UX-12"
