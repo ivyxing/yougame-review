@@ -4,18 +4,23 @@
   "title": "Home page redesign",
   "area": "Home",
   "page_url": "https://yougame.co/?sort=top",
-  "summary": "One mock that answers seven home page critiques at once: a player-first headline with one featured game, a single filter bar, game cards coloured by where they run, a calmer card layout, labelled header actions, an update notice only where it applies, and the accessibility basics.",
+  "summary": "One home page, built on the site's real code, that answers five critiques at once.",
   "before_screenshot": "screenshots/ux/UX-01.png",
-  "after_image": "screenshots/ux/mocks/home-option-a.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "after_image": "screenshots/ux/mocks/home-codebase.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "ideas": [
    "UX-01",
    "UX-02",
    "UX-03",
-   "UX-04",
-   "UX-14",
    "UX-05",
    "UX-09"
+  ],
+  "why": [
+   "A player headline and one featured game first, with the creator pitch further down: most visitors come to play, not upload.",
+   "One filter bar with sort, players and genre as different controls: today they look alike, so people can't tell what combines.",
+   "Cards coloured by where the game runs: people see what they can play right now before clicking.",
+   "The update notice only where it applies: a banner on every page trains people to ignore banners.",
+   "A heading, alt text and button labels: screen-reader users can't use the page today."
   ]
  },
  {
@@ -23,13 +28,22 @@
   "title": "Game page for emulator games",
   "area": "Game page",
   "page_url": "https://yougame.co/g/project-rollback",
-  "summary": "A game page that puts the three setup steps in the hero, with the main button always showing the next step, and a \"Known issues & help\" panel above comments so support questions stop crowding the discussion.",
+  "summary": "A calmer game page for emulator games, built on today's layout and code.",
   "before_screenshot": "screenshots/ux/UX-06.png",
-  "after_image": "screenshots/ux/mocks/game-page-emulator.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-2",
+  "after_image": "screenshots/ux/mocks/game-page-emulator-codebase.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
   "ideas": [
    "UX-06",
-   "UX-12"
+   "UX-12",
+   "UX-16"
+  ],
+  "why": [
+   "Setup steps inside the player: players see how close they are to playing.",
+   "One button that names the next step: there's never a question of what to do.",
+   "One line of facts under the title: it replaces the mode pill and its extra hint row.",
+   "Save and Share by the creator, everything else under \"…\": rare actions stop crowding out the important ones.",
+   "Known issues folded into one line: support questions stop burying the comments, without taking over the page.",
+   "A plain \"More like this\" list: the chips repeated what the title already says."
   ]
  }
 ]
