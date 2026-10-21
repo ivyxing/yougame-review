@@ -4,10 +4,10 @@
   "title": "Home page redesign",
   "area": "Home",
   "page_url": "https://yougame.co/?sort=top",
-  "summary": "One mock that answers seven home page critiques at once: a player-first headline with one featured game, a single filter bar, game cards coloured by where they run, a calmer card layout, labelled header actions, an update notice only where it applies, and the accessibility basics.",
+  "summary": "Built on the site's real code (fonts, colours, header, cards, copy). A player-first headline with one featured game. One filter bar where sort, players and genres each look different. Cards tinted by where the game runs, with a legend. Labelled header buttons. The creator pitch moves down the page.",
   "before_screenshot": "screenshots/ux/UX-01.png",
-  "after_image": "screenshots/ux/mocks/home-option-a.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "after_image": "screenshots/ux/mocks/home-codebase.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "ideas": [
    "UX-01",
    "UX-02",
@@ -16,20 +16,23 @@
    "UX-14",
    "UX-05",
    "UX-09"
-  ]
+  ],
+  "why": "Most visitors come to play, but the page opens with a pitch for creators, and nothing warns that the most popular games need a desktop app and your own disc. This puts a playable game first and shows where each game runs before anyone clicks."
  },
  {
   "id": "RD-02",
   "title": "Game page for emulator games",
   "area": "Game page",
   "page_url": "https://yougame.co/g/project-rollback",
-  "summary": "A game page that puts the three setup steps in the hero, with the main button always showing the next step, and a \"Known issues & help\" panel above comments so support questions stop crowding the discussion.",
+  "summary": "Built on the site's real code. The player shows a three-step \"Get ready to play\" checklist with one button that names the next step. Game facts sit on one line under the title. Only Save, Share and … stay as buttons. Known issues fold into one line. The right rail becomes a plain \"More like this\" list.",
   "before_screenshot": "screenshots/ux/UX-06.png",
-  "after_image": "screenshots/ux/mocks/game-page-emulator.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-2",
+  "after_image": "screenshots/ux/mocks/game-page-emulator-codebase.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
   "ideas": [
    "UX-06",
-   "UX-12"
-  ]
+   "UX-12",
+   "UX-10"
+  ],
+  "why": "On emulator games the setup steps sit below the fold and about ten equal buttons compete under the title, so new players hit a dead end and help questions pile up in the comments."
  }
 ]

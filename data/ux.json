@@ -9,9 +9,9 @@
   "why_it_matters": "Most visitors arrive to play, not to upload. If the first screen speaks to creators, players have to work out the site's purpose on their own, and the games that would hook them sit below the fold.",
   "recommendation": "Lead with one player-facing headline as the page's h1 (for example \"Play community games, free, in your browser\"), with no eyebrow or subtitle, and one featured instant-play game with a big Play button. Keep \"Upload\" in the header and move the creator pitch to a slim card further down the feed.",
   "before_screenshot": "screenshots/ux/UX-01.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "agent_prompt": "On the yougame.co homepage, replace the top \"Have a game you'd like to share?\" intro block with a player-first hero. Requirements: (1) an h1 headline stating what YouGame is for players, max ~10 words; (2) no eyebrow label above it and no subtitle under it; (3) a featured game card (cover, title, creator, one stat line, primary Play button) chosen from the current top game that plays instantly in the browser; (4) remove the \"Share your game\" button from the hero, keep \"Upload\" in the header nav, and add a compact creator card (\"Made a game? Share it\" + link to /upload) after the first row of games. Keep existing routes and sort params working. The page must have exactly one h1.",
-  "after_image": "screenshots/ux/mocks/home-option-a.png"
+  "after_image": "screenshots/ux/mocks/home-codebase.png"
  },
  {
   "id": "UX-02",
@@ -23,9 +23,9 @@
   "why_it_matters": "When every control looks the same, people can't tell which chips combine and which replace each other, or that the right-hand chips change the order rather than filter. Hiding most genres behind a sideways scroll arrow makes them easy to miss.",
   "recommendation": "Give each kind of filter its own control in one bar: a segmented control for sort on the left, a single \"Players\" dropdown, then a genre row showing the top 6 genres plus \"More genres\".",
   "before_screenshot": "screenshots/ux/UX-02.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "agent_prompt": "On the yougame.co homepage, restructure the single filter row into three distinct controls in one bar. (1) Sort (For you / Most played / Newest) becomes a segmented control placed first, on the left. (2) Single player / Multiplayer / All becomes one dropdown labelled \"Players: All\" that keeps the existing ?players= query param. (3) Genres show as chips: the 6 most-used genres plus a \"More genres\" chip that opens the full list, instead of a sideways-scrolling row. Each control type must look different from the others, and the selected state of each must be announced to assistive tech (aria-pressed / aria-selected). Preserve all existing query params (sort, players, genre).",
-  "after_image": "screenshots/ux/mocks/home-option-a.png"
+  "after_image": "screenshots/ux/mocks/home-codebase.png"
  },
  {
   "id": "UX-03",
@@ -37,9 +37,9 @@
   "why_it_matters": "A new player clicks the most popular game, lands on a page whose main button is \"Download desktop app\", and learns they need a legally obtained Wii disc image. That is a dead end for most first-time visitors and makes the site feel like it doesn't work.",
   "recommendation": "Show where each game runs as the card's base colour, not as one more text tag: one colour for \"Plays in your browser\", another for \"Desktop app + your copy\", explained once by a small legend above the grid. Add a \"Plays in browser\" filter that is on by default for first-time visitors, and keep emulator remixes in their own shelf.",
   "before_screenshot": "screenshots/ux/UX-03.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "agent_prompt": "Show where each yougame.co game runs as the base colour of its card instead of a text tag. (1) Derive a runs_in value per game: \"browser\" for web games in the sandboxed frame, \"desktop\" for emulator/ROM-hack games that need the YG desktop app and a user-supplied disc image. (2) Tint the card's info area (below the cover art) with one of two background tokens, e.g. --card-browser and --card-desktop, both meeting 4.5:1 contrast with the card text. (3) Remove the per-card \"Needs your own copy\" text tag. (4) Add one legend above the feed: two swatches labelled \"Plays in your browser\" and \"Desktop app + your copy\", with an info tip beside the second explaining that it needs the YG desktop app and your own legally obtained copy of the base game. (5) Add a \"Plays in browser\" toggle to the filter bar (?instant=1), on by default for visitors who are not signed in and have never opened the desktop app. Colour must not be the only cue for assistive tech: include runs_in in each card's accessible name.",
-  "after_image": "screenshots/ux/mocks/home-option-a.png"
+  "after_image": "screenshots/ux/mocks/home-codebase.png"
  },
  {
   "id": "UX-04",
@@ -51,9 +51,9 @@
   "why_it_matters": "When every card carries eight facts, none of them stands out and scanning the grid is slow. Inconsistent layouts make it hard to compare games at a glance.",
   "recommendation": "Use one fixed card anatomy: cover, title, creator, and a single stat line in plain text (★ 4.2 · 13.9K plays, or \"3 playing now\" when live). Where it runs is the card's base colour (see UX-03). Move input type, mode and last-updated to the game page.",
   "before_screenshot": "screenshots/ux/UX-04.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "agent_prompt": "Refactor the yougame.co GameCard component to a fixed anatomy: (1) 16:9 cover image with meaningful alt text (the game title); (2) title, 1 line, ellipsis; (3) creator name, 1 line; (4) one stat line: if live players > 0 show \"● N playing now\", else show \"★ rating · N plays\" (omit rating if fewer than 3 ratings); separate values with \" · \"; (5) no badges or pills on the card; where the game runs is shown by the card's base colour (see UX-03). Remove input-type tags, mode tags and last-active time from the card. Ensure all cards in a row have equal height.",
-  "after_image": "screenshots/ux/mocks/home-option-a.png"
+  "after_image": "screenshots/ux/mocks/home-codebase.png"
  },
  {
   "id": "UX-05",
@@ -65,9 +65,9 @@
   "why_it_matters": "A banner that appears everywhere trains people to ignore banners, so real announcements get missed. For new visitors it adds jargon (YG Dolphin) on their very first screen.",
   "recommendation": "Only show the update notice inside the desktop app, or on emulator game pages to signed-in users who have used it. Give it a concrete action (\"Update now\") and a dismiss button.",
   "before_screenshot": "screenshots/ux/UX-05.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "agent_prompt": "Change the global \"A YG Dolphin update is out\" banner on yougame.co: (1) render it only when the visitor is in the desktop app, or is signed in and has launched an emulator game before; (2) add an explicit \"Update now\" button that triggers the update (or deep-links to the desktop app) and an icon-only dismiss button with aria-label=\"Dismiss\"; (3) remember dismissal per update version in localStorage; (4) never show it on /login or on web-game pages.",
-  "after_image": "screenshots/ux/mocks/home-option-a.png"
+  "after_image": "screenshots/ux/mocks/home-codebase.png"
  },
  {
   "id": "UX-06",
@@ -79,9 +79,9 @@
   "why_it_matters": "Players can't tell how close they are to playing. \"Download desktop app\" sounds like the whole story, and only after installing do they find they also need a specific Brawl edition (USA Rev 1 or Rev 2).",
   "recommendation": "Put a three-step \"Get ready to play\" checklist in the hero: 1) Get the desktop app, 2) Add your copy of Brawl (USA Rev 1 / Rev 2), 3) Play. Each step shows done or not done, and the main button always shows the next step.",
   "before_screenshot": "screenshots/ux/UX-06.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
   "agent_prompt": "On yougame.co game pages for emulator games (games that require the desktop app and a user-supplied disc image), add a \"Get ready to play\" checklist directly under the title, above the creator row. Steps: (1) \"Get the desktop app\" — done if the desktop app is detected; (2) \"Add your copy of <base game> (<accepted editions>)\" — done if a matching verified image is stored; (3) \"Play\". The primary button label always reflects the first incomplete step (\"Download desktop app\" → \"Add your copy\" → \"Play\"). Show accepted file types in a collapsed \"Which files work?\" disclosure. Keep the existing requirements panel content but move it into this component.",
-  "after_image": "screenshots/ux/mocks/game-page-emulator.png"
+  "after_image": "screenshots/ux/mocks/game-page-emulator-codebase.png"
  },
  {
   "id": "UX-07",
@@ -121,9 +121,9 @@
   "why_it_matters": "Screen-reader users can't tell what the page is or which game a card is, and they hear \"left angle quote\" instead of \"Previous\". Missing headings and alt text also hurt search ranking and link previews.",
   "recommendation": "Add one h1 per page, give cover images alt text with the game's title, and label icon-only buttons (Previous, Next, Dismiss).",
   "before_screenshot": "screenshots/ux/UX-09.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
   "agent_prompt": "Fix accessibility basics across yougame.co: (1) every page has exactly one h1 (homepage: the hero headline; game pages: the game title); (2) every game cover <img> has alt equal to the game title, decorative images use alt=\"\"; (3) carousel arrow buttons get aria-label=\"Previous\" / \"Next\" and are real <button> elements reachable by keyboard; (4) run axe-core on /, /g/globetap and /g/project-rollback and fix all serious/critical violations; include the before/after axe counts in the PR.",
-  "after_image": "screenshots/ux/mocks/home-option-a.png"
+  "after_image": "screenshots/ux/mocks/home-codebase.png"
  },
  {
   "id": "UX-10",
@@ -135,9 +135,9 @@
   "why_it_matters": "When a dozen actions compete, the one that matters (Play) loses emphasis, and rarely used actions like claiming a listing take up prime space.",
   "recommendation": "Group actions into three tiers: one primary (Play), a couple of secondary (Invite, Save, Share), and an overflow \"…\" menu for Remix, Claim this game and Report. Show mode choice (Casual / Ranked / With a friend) only after pressing Play.",
   "before_screenshot": "screenshots/ux/UX-10.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-100",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
   "agent_prompt": "Restructure the action area on yougame.co web-game pages. (1) Primary: a single large Play button. (2) Secondary row: Invite a friend, Save, Share. (3) Overflow menu (\"More\" icon button with aria-label): Remix, Community, Tournaments, This is my game, Report. (4) Move the Casual / Ranked / Play with a friend choice into a small sheet that opens after pressing Play (default Casual; remember last choice). (5) In-game controls (Pause, Restart, End game) must render only while a game session is active.",
-  "after_image": "screenshots/ux/mocks/game-page-browser.png"
+  "after_image": "screenshots/ux/mocks/game-page-emulator-codebase.png"
  },
  {
   "id": "UX-11",
@@ -163,9 +163,9 @@
   "why_it_matters": "Players with a problem scroll through long threads instead of finding an answer, and the developer spends time re-answering. Real discussion about the game gets buried.",
   "recommendation": "Add a \"Known issues & help\" panel above comments listing the top problems and their status, with a clear \"Report a bug\" button. Tag support comments so they can be filtered out of the main discussion.",
   "before_screenshot": "screenshots/ux/UX-12.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=4-2",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
   "agent_prompt": "On yougame.co game pages, add a \"Known issues & help\" panel above the comments section. Data model: per game, a list of {title, status: open|fixed|in progress, help_link?} editable by the game owner. Show up to 5 items with status chips and a \"Report a bug\" button that opens the existing bug report flow pre-filled with the game id. Add an optional \"Help\" tag on comments and a comment filter \"Hide help questions\".",
-  "after_image": "screenshots/ux/mocks/game-page-emulator.png"
+  "after_image": "screenshots/ux/mocks/game-page-emulator-codebase.png"
  },
  {
   "id": "UX-13",
@@ -191,8 +191,22 @@
   "why_it_matters": "Icons without labels make people guess or hover each one. Key actions like uploading a game and sending feedback get missed, and the row reads as clutter.",
   "recommendation": "Show text labels for the actions that matter (Upload, Feedback, Sign in) and move rarely used ones (language, theme, help) into the account or overflow menu. Every remaining icon gets a tooltip and an accessible name.",
   "before_screenshot": "screenshots/ux/UX-01.png",
-  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=2-2",
-  "after_image": "screenshots/ux/mocks/home-option-a.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=10-117",
+  "after_image": "screenshots/ux/mocks/home-codebase.png",
   "agent_prompt": "Rework the yougame.co site header. (1) Keep the logo, search field and account avatar. (2) Replace the icon-only plus and light-bulb buttons with labelled text buttons \"Upload\" and \"Feedback\"; when signed out, show a labelled \"Sign in\" button in place of the avatar. (3) Move the globe (language), palette (theme) and question-mark (help) actions into the account menu (or an overflow \"More\" menu when signed out). (4) The bug icon becomes a \"Report a bug\" item in that menu and stays on game pages. (5) Every icon-only control left in the header gets aria-label and a tooltip. Check the header at 1280px and 375px widths; on mobile, collapse labelled actions into the menu."
+ },
+ {
+  "id": "UX-15",
+  "title": "The site looks like a YouTube skin",
+  "area": "Global",
+  "priority": "medium",
+  "page_url": "https://yougame.co/",
+  "problem": "The site copies YouTube's look as well as its layout: YouTube's colours, the Roboto font, a 56px header, grey pills and a red rounded-square logo. The code says so itself (globals.css names YouTube as its source).",
+  "why_it_matters": "The familiar layout helps people browse, but the copied look makes YouGame read as a clone. The team's own launch checklist already flags the \"YouGame\" name and \"YouTube for games\" pitch as a legal risk, and copying the visuals adds to it. It also gives the site no feeling of play.",
+  "recommendation": "Keep the layout people know (grid of thumbnails, centred search, filter chips, creator byline, related rail). Give YouGame its own look: its own accent colour and logo shape, a type pairing that grows from the Bricolage Grotesque wordmark, and a thumbnail treatment built from the jam gold and tile colours already in the code.",
+  "before_screenshot": "screenshots/ux/UX-01.png",
+  "figma_url": null,
+  "after_image": null,
+  "agent_prompt": "Give yougame.co its own visual identity while keeping its YouTube-style layout. In web/src/app/globals.css: (1) replace the YouTube-derived ink/chip palette's single accent (--on-bg / --accent, currently #0f0f0f) with a distinct brand accent token and use it for primary buttons, selected chips and links; keep 4.5:1 text contrast in light and dark. (2) Introduce a display type role using Bricolage Grotesque (already loaded as --font-display) for page and section headings, keeping Roboto for body text. (3) Redesign components/Logo.tsx so it no longer uses a red rounded square. (4) Remove the header comment that names YouTube as the source. Do not change layout, routes or component structure. Show before/after screenshots of home and a game page in light and dark."
  }
 ]

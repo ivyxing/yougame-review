@@ -780,6 +780,7 @@ function ProposalBody({ proposal, ideas, decisions, onOpen, onZoom }: { proposal
         {proposal.page_url && <OutLink href={proposal.page_url}>See it on YouGame</OutLink>}
         {proposal.figma_url && <OutLink href={proposal.figma_url}>Open the mock in Figma</OutLink>}
       </div>
+      {proposal.why && <Block title="Why"><p>{proposal.why}</p></Block>}
       {proposal.summary && <Block title="What it changes"><p>{proposal.summary}</p></Block>}
       <Block title={`Ideas it answers · ${members.length}`}>
         <ul className="member-list">
