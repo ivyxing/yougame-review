@@ -197,16 +197,30 @@
  },
  {
   "id": "UX-15",
-  "title": "The site looks like a YouTube skin",
+  "title": "The site copies YouTube's look, not just its layout",
   "area": "Global",
   "priority": "medium",
   "page_url": "https://yougame.co/",
-  "problem": "The site copies YouTube's look as well as its layout: YouTube's colours, the Roboto font, a 56px header, grey pills and a red rounded-square logo. The code says so itself (globals.css names YouTube as its source).",
-  "why_it_matters": "The familiar layout helps people browse, but the copied look makes YouGame read as a clone. The team's own launch checklist already flags the \"YouGame\" name and \"YouTube for games\" pitch as a legal risk, and copying the visuals adds to it. It also gives the site no feeling of play.",
-  "recommendation": "Keep the layout people know (grid of thumbnails, centred search, filter chips, creator byline, related rail). Give YouGame its own look: its own accent colour and logo shape, a type pairing that grows from the Bricolage Grotesque wordmark, and a thumbnail treatment built from the jam gold and tile colours already in the code.",
+  "problem": "The site's stylesheet opens with \"Visual language borrowed from YouTube's desktop web app\" and uses YouTube's own values: Roboto, #0f0f0f text, #606060 secondary text, 5% black chips, #065fd4 links, a 56px header with a rounded search box and a sticky chip bar. With a red rounded-square logo, the whole site reads as a YouTube skin. YouGame's own touches (the Bricolage Grotesque wordmark, emoji shelf headings, jam gold, the coloured game tiles) are scattered rather than forming a look of their own.",
+  "why_it_matters": "Borrowing YouTube's layout helps: people already know how to browse a grid of thumbnails with filters and a creator line. Borrowing its identity doesn't. The repo's launch checklist (docs/RELEASE_READINESS.md, Marketing) already says to clear the \"YouGame\" mark and stop describing the product as \"YouTube for games\" in public, and a YouTube-looking site works against that. Nothing in the look says \"play\" either.",
+  "recommendation": "Keep the layout (thumbnail grid, filter chips, creator byline, related list) and replace the identity layer: a type pairing of YouGame's own (for example Bricolage Grotesque for page and section headings, not only the wordmark), its own accent and selection colour, a cover-art treatment for game cards (see IM-01), and a logo that doesn't read as YouTube's red play button. Define these once as tokens so every page picks them up.",
   "before_screenshot": "screenshots/ux/UX-01.png",
   "figma_url": null,
-  "after_image": null,
-  "agent_prompt": "Give yougame.co its own visual identity while keeping its YouTube-style layout. In web/src/app/globals.css: (1) replace the YouTube-derived ink/chip palette's single accent (--on-bg / --accent, currently #0f0f0f) with a distinct brand accent token and use it for primary buttons, selected chips and links; keep 4.5:1 text contrast in light and dark. (2) Introduce a display type role using Bricolage Grotesque (already loaded as --font-display) for page and section headings, keeping Roboto for body text. (3) Redesign components/Logo.tsx so it no longer uses a red rounded square. (4) Remove the header comment that names YouTube as the source. Do not change layout, routes or component structure. Show before/after screenshots of home and a game page in light and dark."
+  "agent_prompt": "Propose a visual identity for yougame.co that keeps today's layout but stops looking like YouTube. Work only in the token layer: the :root, dark-mode and [data-theme=\"dark\"] blocks at the top of web/src/app/globals.css and the fonts in web/src/app/layout.tsx. (1) Pick a heading face and a body face (Bricolage Grotesque is already loaded for the wordmark; it can carry page and section headings). (2) Choose an accent and a selection colour that are not YouTube red or black and pass 4.5:1 for text in light and dark. (3) Remove the \"borrowed from YouTube\" comment and name the new tokens for what they do. (4) Don't change layout, spacing or components. Show before/after screenshots of the home page and one game page in light and dark in the PR, and list every token you changed with its old and new value.",
+  "after_image": null
+ },
+ {
+  "id": "UX-16",
+  "title": "Game pages stack a dozen panels and offer two places to start playing",
+  "area": "Game page",
+  "priority": "medium",
+  "page_url": "https://yougame.co/g/project-rollback",
+  "problem": "Under the player, a game page can stack a mode pill with its own hint line, the creator row, then the Alpha panel, the base-game panel, Versions, Description, Release notes, the remix panel, Leaderboard, Top players, the gallery and Comments, each as its own full-width block. On desktop the right column has a Play menu (lobby, play with a friend) while the row under the title also has Queue and Play with a friend. The right column then opens with chips (More games, the genre, the mode, From the creator) that repeat what the title area already says.",
+  "why_it_matters": "With every section given the same weight, the page reads as one long scroll with no shape, and the same job (start playing, with whom) appears in two places that can disagree. Players can't tell what matters, and creators' updates and leaderboards get lost under everything else.",
+  "recommendation": "One play panel by the player holds every way to start (alone, ranked, with a friend), so the right column no longer repeats it (see UX-10 for the action tiers). Replace the mode row with one line of facts under the title (\"Multiplayer · 2–4 players · ★ 4.2 · 12.4K plays\"). After a short description, put the rest in tabs: Leaderboard · Versions & remixes · Updates · Comments. Start the right column with a plain \"More like this\" heading instead of chips.",
+  "before_screenshot": "screenshots/ux/UX-10.png",
+  "figma_url": "https://www.figma.com/design/JR1dhB7UjFcsOffPflWhq5/YouGame-UX-redesign-options?node-id=16-130",
+  "agent_prompt": "Restructure the game page at web/src/app/g/[slug]/page.tsx on yougame.co. (1) Merge the desktop PlayMenu in the right column (.rail) with the play actions in the byline (QueuePicker, PlayWithFriend) into one play panel beside the Player; the rail keeps only related games. (2) Replace the .game-mode row (mode pill + hint) with one meta line under the title: mode, player count, rating, plays. (3) Below the description, render Leaderboard/TopPlayers, the versions panel plus RemixPanel, ReleaseNotes and Comments as tabs (\"Leaderboard\", \"Versions & remixes\", \"Updates\", \"Comments\"), each tab only when it has content, Comments selected by default; keep the URL hash in sync so #comment-<id> links still open the Comments tab. (4) Replace the rail's chip row with an h2 \"More like this\". Keep every existing feature reachable. Add strings to web/src/i18n/messages/en.json. Show desktop and phone screenshots before and after.",
+  "after_image": "screenshots/ux/mocks/game-page-emulator-codebase.png"
  }
 ]

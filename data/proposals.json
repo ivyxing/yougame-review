@@ -31,7 +31,8 @@
   "ideas": [
    "UX-06",
    "UX-12",
-   "UX-10"
+   "UX-10",
+   "UX-16"
   ],
   "why": "On emulator games the setup steps sit below the fold and about ten equal buttons compete under the title, so new players hit a dead end and help questions pile up in the comments."
  }
